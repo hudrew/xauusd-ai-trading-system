@@ -188,19 +188,34 @@ class MT5PreflightRunner:
             )
 
             tick = mt5.symbol_info_tick(symbol) if symbol_selected else None
+            tick_bid = getattr(tick, "bid", None) if tick is not None else None
+            tick_ask = getattr(tick, "ask", None) if tick is not None else None
+            zero_quote = (
+                tick is not None
+                and tick_bid in (0, 0.0)
+                and tick_ask in (0, 0.0)
+            )
             checks.append(
                 PreflightCheck(
                     name="latest_tick",
                     passed=tick is not None,
                     detail=(
-                        f"Latest tick available for {symbol}."
-                        if tick is not None
-                        else f"MT5 symbol_info_tick failed for {symbol}: {mt5.last_error()}"
+                        (
+                            f"Latest tick available for {symbol}, but bid/ask are both 0. "
+                            "This usually means the symbol is currently closed or no live quote is streaming."
+                        )
+                        if zero_quote
+                        else (
+                            f"Latest tick available for {symbol}."
+                            if tick is not None
+                            else f"MT5 symbol_info_tick failed for {symbol}: {mt5.last_error()}"
+                        )
                     ),
                     metadata=(
                         {
-                            "bid": getattr(tick, "bid", None),
-                            "ask": getattr(tick, "ask", None),
+                            "bid": tick_bid,
+                            "ask": tick_ask,
+                            "zero_quote": zero_quote,
                         }
                         if tick is not None
                         else {}

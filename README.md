@@ -271,6 +271,12 @@ PYTHONPATH=src ./.venv/bin/python examples/replay_csv.py /path/to/xauusd_m1.csv
 PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli acceptance /path/to/xauusd_m1.csv
 ```
 
+从 MT5 直接导出历史 M1 数据到 CSV：
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli export-mt5-history ./tmp/xauusd_m1_history.csv --config configs/mt5_paper.yaml --bars 20000 --timeframe M1
+```
+
 查看最近 5 次验收归档：
 
 ```bash
@@ -288,6 +294,14 @@ PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli reports latest
 ```bash
 PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli reports trend --limit 10
 ```
+
+把外部机器生成的验收 JSON 导入当前项目归档：
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli report-import /path/to/latest.json
+```
+
+如果研究报告是在另一台机器生成的，这一步可以把它正式写入当前仓库的 `reports/research`，然后再跑 `deploy-gate`。
 
 运行统一上线门禁：
 
@@ -361,6 +375,19 @@ PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli acceptance /path/to/xa
 PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli acceptance /path/to/xauusd_m1.csv --config configs/mvp.yaml --report-dir /tmp/xauusd_reports
 ```
 
+把 MT5 历史导出和验收串起来：
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli export-mt5-history ./tmp/xauusd_m1_history.csv --config configs/mt5_paper.yaml --bars 20000 --timeframe M1
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli acceptance ./tmp/xauusd_m1_history.csv --config configs/mvp.yaml
+```
+
+把另一台机器生成的 `latest.json` 导入到当前归档目录：
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli report-import /path/to/acceptance_latest.json --report-dir reports/research
+```
+
 只看输出、不落盘：
 
 ```bash
@@ -405,6 +432,8 @@ xauusd-ai backtest /path/to/xauusd_m1.csv --config configs/mvp.yaml
 xauusd-ai sample-split /path/to/xauusd_m1.csv --config configs/mvp.yaml --train-ratio 0.7 --warmup-bars 720
 xauusd-ai walk-forward /path/to/xauusd_m1.csv --config configs/mvp.yaml --train-bars 5000 --test-bars 1000 --step-bars 1000 --warmup-bars 720
 xauusd-ai acceptance /path/to/xauusd_m1.csv --config configs/mvp.yaml --train-ratio 0.7 --warmup-bars 720 --train-bars 5000 --test-bars 1000 --step-bars 1000
+xauusd-ai export-mt5-history ./tmp/xauusd_m1_history.csv --config configs/mt5_paper.yaml --bars 20000 --timeframe M1
+xauusd-ai report-import /path/to/acceptance_latest.json --report-dir reports/research
 ```
 
 说明：
@@ -419,6 +448,8 @@ xauusd-ai acceptance /path/to/xauusd_m1.csv --config configs/mvp.yaml --train-ra
 - `walk-forward` 会输出每个滚动测试窗口的独立表现和聚合 summary，适合看稳定性
 - `acceptance` 会输出统一的 `ready / checks / failed_checks`，适合做自动验收和后续 CI 化
 - `acceptance` 默认会自动归档完整 JSON 报告；如需关闭，可加 `--no-save-archive`
+- `export-mt5-history` 会把 MT5 bars 直接导出成项目可读 CSV，并把 bar 里的 `spread` 从“点数”转成真实价格差
+- `report-import` 适合把研究节点或别的机器上生成的 `acceptance` JSON 正式导入当前机器的 `reports/research`
 - `decision_summary.rows_processed` 表示真正执行了决策评估的 bars，不等于全部 `evaluation_rows`；挂单存活期间系统会跳过重复决策
 
 ## 配置重点
@@ -579,6 +610,7 @@ export XAUUSD_AI_CTRADER_ENV=demo
 - `scripts/local_mt5_smoke.sh`
 - `scripts/mt5_host_check.sh`
 - `scripts/mt5_preflight.sh`
+- `scripts/mt5_export_history.sh`
 - `scripts/mt5_deploy_gate.sh`
 - `scripts/mt5_live_once.sh`
 - `scripts/mt5_paper_loop.sh`
@@ -586,6 +618,7 @@ export XAUUSD_AI_CTRADER_ENV=demo
 - `scripts/mt5_bootstrap.ps1`
 - `scripts/mt5_host_check.ps1`
 - `scripts/mt5_preflight.ps1`
+- `scripts/mt5_export_history.ps1`
 - `scripts/mt5_deploy_gate.ps1`
 - `scripts/mt5_live_once.ps1`
 - `scripts/mt5_paper_loop.ps1`
@@ -601,6 +634,7 @@ export XAUUSD_AI_CTRADER_ENV=demo
 bash scripts/local_mt5_smoke.sh
 bash scripts/mt5_host_check.sh
 bash scripts/mt5_preflight.sh
+bash scripts/mt5_export_history.sh .env.mt5.local ./tmp/xauusd_m1_history.csv --bars 20000 --timeframe M1
 bash scripts/mt5_deploy_gate.sh .env.mt5.local
 bash scripts/mt5_live_once.sh .env.mt5.local
 bash scripts/mt5_paper_loop.sh .env.mt5.local --iterations 10
@@ -613,6 +647,7 @@ Windows 执行宿主机推荐直接用 PowerShell：
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_bootstrap.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_host_check.ps1 .env.mt5.local
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_preflight.ps1 .env.mt5.local
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_export_history.ps1 .env.mt5.local .\tmp\xauusd_m1_history.csv --bars 20000 --timeframe M1
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_deploy_gate.ps1 .env.mt5.local
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_live_once.ps1 .env.mt5.local
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_paper_loop.ps1 .env.mt5.local --iterations 10

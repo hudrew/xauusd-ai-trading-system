@@ -354,6 +354,83 @@ def _run_reports(
     print(json.dumps(base_payload, indent=2, ensure_ascii=False))
 
 
+def _run_report_import(
+    config: SystemConfig,
+    *,
+    json_path: str,
+    report_type: str | None,
+    report_dir: str | None,
+) -> None:
+    from .storage.report_archive import FileReportArchive
+
+    source_path = Path(json_path)
+    envelope = json.loads(source_path.read_text(encoding="utf-8"))
+    if not isinstance(envelope, dict):
+        raise SystemExit("Imported report JSON must be an object.")
+
+    if isinstance(envelope.get("payload"), dict):
+        payload = dict(envelope["payload"])
+        inferred_report_type = envelope.get("report_type")
+        summary = envelope.get("summary") or payload.get("summary") or {}
+        ready = envelope.get("ready")
+        if ready is None:
+            ready = payload.get("ready")
+    else:
+        payload = dict(envelope)
+        inferred_report_type = None
+        summary = payload.get("summary") or {}
+        ready = payload.get("ready")
+
+    payload.pop("archive", None)
+
+    archive_config = _build_report_archive_config(config, report_dir)
+    archive_config.enabled = True
+
+    resolved_report_type = report_type or inferred_report_type or "acceptance"
+    archive_record = FileReportArchive(archive_config).save(
+        resolved_report_type,
+        payload,
+        summary=summary if isinstance(summary, dict) else {},
+        ready=ready if isinstance(ready, bool) else None,
+    )
+    if archive_record is None:
+        raise SystemExit("Report archive is disabled; unable to import report.")
+
+    print(
+        json.dumps(
+            {
+                "imported": True,
+                "source_path": str(source_path),
+                "report_type": resolved_report_type,
+                "checked_at": payload.get("checked_at"),
+                "ready": ready if isinstance(ready, bool) else None,
+                "record": archive_record.as_dict(),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+
+
+def _run_export_mt5_history(
+    config: SystemConfig,
+    *,
+    output_path: str,
+    symbol: str | None,
+    timeframe: str | None,
+    bars: int | None,
+) -> None:
+    from .data.mt5_history_exporter import MT5HistoryCsvExporter
+
+    result = MT5HistoryCsvExporter(config).export_csv(
+        output_path,
+        symbol=symbol,
+        timeframe=timeframe,
+        bars=bars,
+    )
+    print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))
+
+
 def _run_deploy_gate(
     config: SystemConfig,
     *,
@@ -702,6 +779,48 @@ def main() -> None:
         action="store_true",
         help="Include the full archived payload in latest mode.",
     )
+    report_import_parser = subparsers.add_parser(
+        "report-import",
+        help="Import a previously generated report JSON into the local research archive.",
+    )
+    report_import_parser.add_argument(
+        "json_path",
+        help="Path to a raw report JSON or an archived latest.json envelope.",
+    )
+    report_import_parser.add_argument(
+        "--report-type",
+        default=None,
+        help="Optional override for the imported report type. Defaults to the JSON envelope value or acceptance.",
+    )
+    report_import_parser.add_argument(
+        "--report-dir",
+        default=None,
+        help="Optional override for report_archive.base_dir. Relative paths are resolved from the project root.",
+    )
+    export_mt5_parser = subparsers.add_parser(
+        "export-mt5-history",
+        help="Export MT5 historical bars into a normalized CSV for replay/backtest/acceptance.",
+    )
+    export_mt5_parser.add_argument(
+        "output_path",
+        help="Path to the CSV file to write.",
+    )
+    export_mt5_parser.add_argument(
+        "--symbol",
+        default=None,
+        help="Optional MT5 symbol override. Defaults to config symbol.",
+    )
+    export_mt5_parser.add_argument(
+        "--timeframe",
+        default=None,
+        help="Optional MT5 timeframe override such as M1/M5/M15/H1. Defaults to config timeframe.",
+    )
+    export_mt5_parser.add_argument(
+        "--bars",
+        type=int,
+        default=20000,
+        help="Number of most recent bars to export. Defaults to 20000.",
+    )
     deploy_gate_parser = subparsers.add_parser(
         "deploy-gate",
         help="Run research acceptance and live readiness checks as a single deployment gate.",
@@ -865,6 +984,23 @@ def main() -> None:
             limit=args.limit,
             report_dir=args.report_dir,
             full=args.full,
+        )
+        return
+    if args.command == "report-import":
+        _run_report_import(
+            config,
+            json_path=args.json_path,
+            report_type=args.report_type,
+            report_dir=args.report_dir,
+        )
+        return
+    if args.command == "export-mt5-history":
+        _run_export_mt5_history(
+            config,
+            output_path=args.output_path,
+            symbol=args.symbol,
+            timeframe=args.timeframe,
+            bars=args.bars,
         )
         return
     if args.command == "deploy-gate":

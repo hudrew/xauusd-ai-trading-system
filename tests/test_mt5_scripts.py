@@ -37,6 +37,15 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn("deploy-gate --strict", shell_script.read_text(encoding="utf-8"))
         self.assertIn('"deploy-gate", "--strict"', powershell_script.read_text(encoding="utf-8"))
 
+    def test_export_history_scripts_exist(self) -> None:
+        shell_script = ROOT / "scripts/mt5_export_history.sh"
+        powershell_script = ROOT / "scripts/mt5_export_history.ps1"
+
+        self.assertTrue(shell_script.exists())
+        self.assertTrue(powershell_script.exists())
+        self.assertIn("export-mt5-history", shell_script.read_text(encoding="utf-8"))
+        self.assertIn('"export-mt5-history"', powershell_script.read_text(encoding="utf-8"))
+
     def test_powershell_task_registration_scripts_exist(self) -> None:
         register_script = ROOT / "scripts/mt5_register_task.ps1"
         unregister_script = ROOT / "scripts/mt5_unregister_task.ps1"

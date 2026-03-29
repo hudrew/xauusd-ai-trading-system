@@ -188,6 +188,47 @@ class LiveTradingRunnerTests(unittest.TestCase):
         self.assertEqual(runtime_service.account_state.open_positions, 1)
         self.assertEqual(account_state_service.reference_times, [])
 
+    def test_run_once_reconstructs_historical_bid_ask_from_spread(self) -> None:
+        config = SystemConfig()
+        config.market_data.platform = "mt5"
+        config.market_data.mt5.history_bars = 240
+
+        timestamps = pd.date_range("2026-03-29 08:00:00", periods=240, freq="min")
+        close = pd.Series(range(240), dtype="float64") * 0.03 + 3000.0
+        bars = pd.DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": close,
+                "high": close + 0.4,
+                "low": close - 0.4,
+                "close": close + 0.1,
+                "tick_volume": 3,
+                "spread": 0.10,
+            }
+        ).to_dict(orient="records")
+        quote = Quote(
+            timestamp=datetime(2026, 3, 29, 11, 59, 30),
+            symbol="XAUUSD",
+            bid=3009.45,
+            ask=3009.75,
+        )
+
+        runtime_service = StubRuntimeService()
+        market_data_service = StubMarketDataService(quote, bars)
+        account_state_service = StubAccountStateService(
+            AccountState(equity=config.runtime.starting_equity)
+        )
+        runner = LiveTradingRunner(
+            config,
+            runtime_service=runtime_service,
+            market_data_service=market_data_service,
+            account_state_service=account_state_service,
+        )
+
+        runner.run_once()
+
+        self.assertGreater(float(runtime_service.snapshot.feature("spread_ratio")), 1.5)
+
 
 if __name__ == "__main__":
     unittest.main()

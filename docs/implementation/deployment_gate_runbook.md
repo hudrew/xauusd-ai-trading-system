@@ -31,6 +31,13 @@ PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli deploy-gate --config c
 - `ready` 是否为 `true`
 - 报告时间是否超过 `deployment_gate.max_acceptance_report_age_hours`
 
+如果执行宿主机本身不跑研究回测，而研究是在本地开发机或另一台机器完成的，当前标准做法是：
+
+1. 在研究节点生成 `acceptance` 报告
+2. 把生成出来的 `latest.json` 拷到执行宿主机
+3. 在执行宿主机运行 `report-import`
+4. 再执行 `deploy-gate`
+
 ### 2. 宿主机检查
 
 在 `dry_run=false` 的 live 模式下，门禁默认会要求：
@@ -121,6 +128,27 @@ PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli live-once --require-de
 ```bash
 PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli live-once --require-preflight
 ```
+
+把别的机器生成的验收 JSON 导入当前宿主机：
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli report-import C:/work/incoming/acceptance_latest.json --report-dir reports/research
+```
+
+推荐顺序：
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli report-import C:/work/incoming/acceptance_latest.json --report-dir reports/research
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli reports latest --report-dir reports/research
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli deploy-gate --config configs/mt5_prod.yaml --strict
+```
+
+说明：
+
+- `report-import` 同时支持直接导入 `acceptance` 命令输出的原始 JSON
+- 也支持直接导入归档目录里的 `latest.json`
+- 门禁新鲜度优先读取报告内部的 `checked_at`，不是导入时间
+- 所以这一步适合“研究在 A 机执行，MT5 在 B 机执行”的正式分工
 
 ## 当前边界
 

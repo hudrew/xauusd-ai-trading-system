@@ -182,10 +182,26 @@ class LiveTradingRunner:
         else:
             frame["symbol"] = frame["symbol"].fillna(latest_quote.symbol)
 
-        if "bid" not in frame.columns:
-            frame["bid"] = frame["close"].astype(float)
-        if "ask" not in frame.columns:
-            frame["ask"] = frame["close"].astype(float)
+        if "spread" not in frame.columns:
+            frame["spread"] = 0.0
+        frame["spread"] = frame["spread"].fillna(0.0).astype(float)
+
+        if "bid" not in frame.columns and "ask" not in frame.columns:
+            frame["bid"] = frame["close"].astype(float) - frame["spread"] / 2.0
+            frame["ask"] = frame["close"].astype(float) + frame["spread"] / 2.0
+        else:
+            if "bid" not in frame.columns:
+                frame["ask"] = frame["ask"].astype(float)
+                frame["bid"] = frame["ask"] - frame["spread"]
+            if "ask" not in frame.columns:
+                frame["bid"] = frame["bid"].astype(float)
+                frame["ask"] = frame["bid"] + frame["spread"]
+            frame["bid"] = frame["bid"].fillna(
+                frame["close"].astype(float) - frame["spread"] / 2.0
+            ).astype(float)
+            frame["ask"] = frame["ask"].fillna(
+                frame["close"].astype(float) + frame["spread"] / 2.0
+            ).astype(float)
 
         if "session_tag" not in frame.columns:
             frame["session_tag"] = ""

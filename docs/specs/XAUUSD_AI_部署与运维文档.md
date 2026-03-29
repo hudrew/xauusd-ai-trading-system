@@ -106,6 +106,8 @@
 - 环境变量覆盖
 - `host-check`
 - `preflight`
+- `export-mt5-history`
+- `report-import`
 - `deploy-gate`
 - `live-once`
 - `live-loop`
@@ -122,20 +124,24 @@
 2. 填入真实 MT5 账号、密码、服务器、终端路径
 3. 先跑 `bash scripts/mt5_host_check.sh`
 4. 再跑 `bash scripts/mt5_preflight.sh`
-5. 再跑 `bash scripts/mt5_deploy_gate.sh .env.mt5.local`
-6. 再跑 `bash scripts/mt5_live_once.sh .env.mt5.local`
-7. 再跑 `bash scripts/mt5_paper_loop.sh .env.mt5.local --iterations 10`
+5. 如需本机导出研究数据，先跑 `bash scripts/mt5_export_history.sh .env.mt5.local ./tmp/xauusd_m1_history.csv --bars 20000 --timeframe M1`
+6. 如果研究报告在别的机器生成，先用 `report-import` 导入 `acceptance latest.json`
+7. 再跑 `bash scripts/mt5_deploy_gate.sh .env.mt5.local`
+8. 再跑 `bash scripts/mt5_live_once.sh .env.mt5.local`
+9. 再跑 `bash scripts/mt5_paper_loop.sh .env.mt5.local --iterations 10`
 
 如果执行宿主机是 Windows，优先使用：
 
 1. `powershell -ExecutionPolicy Bypass -File .\scripts\mt5_bootstrap.ps1`
 2. `powershell -ExecutionPolicy Bypass -File .\scripts\mt5_host_check.ps1 .env.mt5.local`
 3. `powershell -ExecutionPolicy Bypass -File .\scripts\mt5_preflight.ps1 .env.mt5.local`
-4. `powershell -ExecutionPolicy Bypass -File .\scripts\mt5_deploy_gate.ps1 .env.mt5.local`
-5. `powershell -ExecutionPolicy Bypass -File .\scripts\mt5_live_once.ps1 .env.mt5.local`
-6. `powershell -ExecutionPolicy Bypass -File .\scripts\mt5_paper_loop.ps1 .env.mt5.local --iterations 10`
-7. 长期运行时，注册 `Task Scheduler`
-8. 用 `mt5_task_status.ps1` 检查任务状态和最新日志
+4. 如需本机导出研究数据，先运行 `powershell -ExecutionPolicy Bypass -File .\scripts\mt5_export_history.ps1 .env.mt5.local .\tmp\xauusd_m1_history.csv --bars 20000 --timeframe M1`
+5. 如果研究报告在别的机器生成，先运行 `report-import`
+6. `powershell -ExecutionPolicy Bypass -File .\scripts\mt5_deploy_gate.ps1 .env.mt5.local`
+7. `powershell -ExecutionPolicy Bypass -File .\scripts\mt5_live_once.ps1 .env.mt5.local`
+8. `powershell -ExecutionPolicy Bypass -File .\scripts\mt5_paper_loop.ps1 .env.mt5.local --iterations 10`
+9. 长期运行时，注册 `Task Scheduler`
+10. 用 `mt5_task_status.ps1` 检查任务状态和最新日志
 
 当前环境备注：
 
@@ -147,11 +153,19 @@
 
 1. `host-check --strict`
 2. `preflight --strict`
-3. `deploy-gate --strict`
-4. `live-once --require-deploy-gate --require-preflight`
-5. `live-loop --require-deploy-gate --require-preflight`
-6. 需要长期运行时，再注册 `Task Scheduler`
-7. 上线后持续用任务状态脚本和日志目录做巡检
+3. 如有需要，先 `report-import`
+4. `deploy-gate --strict`
+5. `live-once --require-deploy-gate --require-preflight`
+6. `live-loop --require-deploy-gate --require-preflight`
+7. 需要长期运行时，再注册 `Task Scheduler`
+8. 上线后持续用任务状态脚本和日志目录做巡检
+
+当前运维经验补充：
+
+- 如果 `preflight` 里 `latest_tick` 存在，但 `bid/ask=0`
+  优先判断是否为停盘期或无活跃报价，而不是先判断成网络故障
+- 如果 `recent_bars` 仍然可读，说明 MT5 初始化、symbol 选择和历史数据链通常仍然正常
+- `deploy-gate` 使用研究报告中的 `checked_at` 判断新鲜度，所以 `report-import` 不会把旧报告“伪装成新报告”
 
 ---
 

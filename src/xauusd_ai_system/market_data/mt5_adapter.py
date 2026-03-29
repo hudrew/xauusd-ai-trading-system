@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from ..config.schema import MarketDataConfig
@@ -53,6 +53,9 @@ class MT5MarketDataAdapter(MarketDataAdapter):
             mt5.shutdown()
             raise RuntimeError(f"MT5 symbol_select failed for {symbol}: {error}")
 
+        symbol_info = mt5.symbol_info(symbol)
+        point = float(getattr(symbol_info, "point", 0.0) or 0.0)
+
         timeframe_name = self.TIMEFRAME_MAP.get(
             self.config.mt5.timeframe.upper(),
             "TIMEFRAME_M1",
@@ -71,21 +74,53 @@ class MT5MarketDataAdapter(MarketDataAdapter):
 
         result = []
         for bar in bars:
-            result.append(
-                {
-                    "timestamp": datetime.fromtimestamp(bar["time"]),
-                    "open": float(bar["open"]),
-                    "high": float(bar["high"]),
-                    "low": float(bar["low"]),
-                    "close": float(bar["close"]),
-                    "tick_volume": int(bar["tick_volume"]),
-                    "spread": int(bar["spread"]),
-                    "real_volume": int(bar["real_volume"]),
-                    "symbol": symbol,
-                }
-            )
+            result.append(self.normalize_bar(bar, symbol=symbol, point=point))
         mt5.shutdown()
         return result
+
+    @staticmethod
+    def normalize_bar(
+        bar: Any,
+        *,
+        symbol: str,
+        point: float,
+    ) -> dict[str, Any]:
+        close = float(MT5MarketDataAdapter._bar_value(bar, "close", 0.0))
+        spread_points = float(MT5MarketDataAdapter._bar_value(bar, "spread", 0.0))
+        spread = (
+            spread_points * point
+            if point > 0.0
+            else spread_points
+        )
+        bid = close - spread / 2.0
+        ask = close + spread / 2.0
+        return {
+            "timestamp": datetime.fromtimestamp(
+                int(MT5MarketDataAdapter._bar_value(bar, "time", 0)),
+                tz=timezone.utc,
+            ),
+            "open": float(MT5MarketDataAdapter._bar_value(bar, "open", close)),
+            "high": float(MT5MarketDataAdapter._bar_value(bar, "high", close)),
+            "low": float(MT5MarketDataAdapter._bar_value(bar, "low", close)),
+            "close": close,
+            "bid": bid,
+            "ask": ask,
+            "volume": float(MT5MarketDataAdapter._bar_value(bar, "tick_volume", 0.0)),
+            "tick_volume": int(MT5MarketDataAdapter._bar_value(bar, "tick_volume", 0)),
+            "spread": spread,
+            "real_volume": int(MT5MarketDataAdapter._bar_value(bar, "real_volume", 0)),
+            "symbol": symbol,
+        }
+
+    @staticmethod
+    def _bar_value(bar: Any, field: str, default: Any) -> Any:
+        if isinstance(bar, dict):
+            return bar.get(field, default)
+
+        try:
+            return bar[field]
+        except (KeyError, IndexError, TypeError, ValueError):
+            return getattr(bar, field, default)
 
     def _initialize(self) -> Any:
         try:
@@ -104,4 +139,3 @@ class MT5MarketDataAdapter(MarketDataAdapter):
         if not initialized:
             raise RuntimeError(f"MT5 initialize failed: {mt5.last_error()}")
         return mt5
-

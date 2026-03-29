@@ -36,13 +36,25 @@ class FakeTick:
     ask = 3060.3
 
 
+class FakeZeroTick:
+    bid = 0.0
+    ask = 0.0
+
+
 class FakeMT5:
     TIMEFRAME_M1 = 1
 
-    def __init__(self, *, initialize_ok: bool = True, tradeapi_disabled: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        initialize_ok: bool = True,
+        tradeapi_disabled: bool = False,
+        zero_tick: bool = False,
+    ) -> None:
         self.initialize_ok = initialize_ok
         self._tradeapi_disabled = tradeapi_disabled
         self.trade_contract_size = 100.0
+        self.zero_tick = zero_tick
 
     def initialize(self, **kwargs):
         return self.initialize_ok
@@ -70,6 +82,8 @@ class FakeMT5:
         return info
 
     def symbol_info_tick(self, symbol):
+        if self.zero_tick:
+            return FakeZeroTick()
         return FakeTick()
 
     def copy_rates_from_pos(self, symbol, timeframe, start, count):
@@ -144,6 +158,25 @@ class MT5PreflightRunnerTests(unittest.TestCase):
         self.assertFalse(report.ready)
         init_check = next(item for item in report.checks if item.name == "mt5_initialize")
         self.assertFalse(init_check.passed)
+
+    def test_preflight_marks_zero_quote_tick_as_informative_detail(self) -> None:
+        config = SystemConfig()
+        config.market_data.platform = "mt5"
+        config.execution.platform = "mt5"
+        config.runtime.dry_run = True
+        config.market_data.mt5.timeframe = "M1"
+        config.market_data.mt5.history_bars = 10
+
+        report = MT5PreflightRunner(
+            config,
+            mt5_module=FakeMT5(zero_tick=True),
+        ).run()
+
+        self.assertTrue(report.ready)
+        tick_check = next(item for item in report.checks if item.name == "latest_tick")
+        self.assertTrue(tick_check.passed)
+        self.assertTrue(tick_check.metadata["zero_quote"])
+        self.assertIn("bid/ask are both 0", tick_check.detail)
 
 
 if __name__ == "__main__":

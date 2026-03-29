@@ -159,6 +159,23 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_preflight.ps1 .env.mt5.lo
 - recent_bars
 - trade_permission
 
+当前联调经验补充：
+
+- 如果 `latest_tick` 存在，但 `bid=0 / ask=0`
+  通常优先表示“品种当前停盘”或“此刻没有活跃报价”，不应第一时间误判成网络断开
+- 如果 `recent_bars` 仍然能拉到，说明 MT5 初始化、symbol 选择和历史数据链通常是通的
+- 如果同时 `trade_allowed=false`
+  需要再区分是停盘期的正常状态，还是账户本身被券商禁用了交易权限
+
+也就是说，停盘期最值得看的不是单独一个 `bid/ask`，而是要把：
+
+- `latest_tick`
+- `recent_bars`
+- `account_info.trade_allowed`
+- `terminal_info.tradeapi_disabled`
+
+放在一起判断。
+
 ### 第三步：先做一次单次联调
 
 ```bash
@@ -181,6 +198,46 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_live_once.ps1 .env.mt5.lo
 
 - `mt5_live_once` 脚本现在默认会带上 `deploy-gate + preflight`
 - 也就是说，脚本入口已经不是“只拉一次行情”，而是“先过门禁，再跑一次完整联调”
+
+### 研究数据导出
+
+如果这台 Windows 宿主机同时负责导出历史数据做研究验收，可以直接导出最近一段 MT5 bars：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_export_history.ps1 .env.mt5.local .\tmp\xauusd_m1_history.csv --bars 20000 --timeframe M1
+```
+
+导出后的 CSV 已经是项目可直接读取的格式，包含：
+
+- `timestamp`
+- `open / high / low / close`
+- `bid / ask`
+- `spread`
+- `volume / tick_volume`
+
+其中 bar 内 `spread` 会从 MT5 的“点数”自动换算成真实价格差，避免回测或特征层误把点差放大。
+
+建议紧接着执行：
+
+```powershell
+.venv\Scripts\python.exe -m xauusd_ai_system.cli --config configs\mvp.yaml acceptance .\tmp\xauusd_m1_history.csv
+```
+
+### 研究验收归档导入
+
+如果研究回测不在这台 Windows 宿主机上执行，而是在本地研发机完成，先把研究报告导入当前宿主机：
+
+```powershell
+.venv\Scripts\python.exe -m xauusd_ai_system.cli report-import C:\work\incoming\acceptance_latest.json --report-dir reports/research
+```
+
+建议马上核对：
+
+```powershell
+.venv\Scripts\python.exe -m xauusd_ai_system.cli reports latest --report-dir reports/research
+```
+
+确认最新 `acceptance` 已存在、`ready=true`、`checked_at` 在允许时效内，再继续跑 `mt5_deploy_gate.ps1`。
 
 ## 启动顺序
 
@@ -313,6 +370,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_unregister_task.ps1 -Mode
 - 账号权限是否允许交易
 - `XAUUSD` 是否可见
 - 最近 bars 是否拉取成功
+- 如果 `latest_tick` 里 `bid/ask=0`
+  先确认是不是停盘期；只要 `recent_bars` 还能拉到，就不要先把问题归咎到网络或 SSH
 
 ### live-loop 运行失败
 
