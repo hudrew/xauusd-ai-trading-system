@@ -29,6 +29,9 @@ cd xauusd-ai-trading-system
 - 首发建议优先走 `MT5`
 - `cTrader` 已经接入统一接口，但当前仍缺完整异步会话层，不建议作为第一条上线通道
 - 高波动预警模块已经作为独立模块接入主流程，并能联动风控与通知
+- 最新 `40k` MT5 基线显示 `asia` 明显拖累、`breakout` 暂弱于 `pullback`
+- 因此当前 `configs/mvp.yaml` 已加入研究收缩默认值：关闭 `breakout`，并只允许 `eu / overlap / us`
+- 当前不直接切成“只做 us”，因为这会和现有 `session_profit_concentration` 验收规则冲突
 
 ## 仓库里现在有什么
 
@@ -189,17 +192,32 @@ cd xauusd-ai-trading-system
 - `trend_breakout / pullback_continuation` 会检查 `M5 + M15 + H1` 的趋势同向性
 - `range_mean_reversion` 会过滤掉高周期趋势过强的环境
 - 趋势型信号在高周期仅部分对齐时会自动缩仓，完全反向时会被阻断
+- 候选信号生成后还会经过统一 `routing` 准入层，支持按时段和策略开关做收缩
 
 ## 架构分层
 
 - `Backtrader`：只负责研究、回测、历史回放
-- `TradingSystem`：负责市场状态、策略、风控、高波动预警
+- `TradingSystem`：负责市场状态、策略、路由准入、风控、高波动预警
 - `TradingRuntimeService`：负责审计落库、日志、通知、执行编排
 - `PreflightRunner`：负责上线前检查平台、账号、symbol、行情和交易权限是否可用
 - `AccountStateService`：负责从交易平台同步权益、持仓数、交易可用状态，并维护日内基线与峰值
 - `LiveTradingRunner`：负责实时拉取行情、账户状态、生成特征、构建快照、驱动运行时
 - `ExecutionService`：统一路由到 MT5 或 cTrader 执行适配器
 - `MarketDataService`：统一路由到 MT5 或 cTrader 行情适配器
+
+## 当前研究收缩配置
+
+当前 `configs/mvp.yaml` 默认研究口径：
+
+- `routing.disabled_strategies = ["breakout"]`
+- `routing.allowed_sessions = ["eu", "overlap", "us"]`
+
+如果需要临时覆盖，也可以直接用环境变量：
+
+- `XAUUSD_AI_ENABLED_STRATEGIES`
+- `XAUUSD_AI_DISABLED_STRATEGIES`
+- `XAUUSD_AI_ALLOWED_SESSIONS`
+- `XAUUSD_AI_BLOCKED_SESSIONS`
 
 ## 当前生产建议
 

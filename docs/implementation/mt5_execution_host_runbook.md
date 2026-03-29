@@ -112,6 +112,10 @@ copy .env.mt5.example .env.mt5.local
 - `XAUUSD_AI_RISK_MAX_SPREAD_RATIO`
 - `XAUUSD_AI_STATE_SPREAD_RATIO_MAX`
 - `XAUUSD_AI_VOLATILITY_SPREAD_RATIO_TRIGGER`
+- `XAUUSD_AI_ENABLED_STRATEGIES`
+- `XAUUSD_AI_DISABLED_STRATEGIES`
+- `XAUUSD_AI_ALLOWED_SESSIONS`
+- `XAUUSD_AI_BLOCKED_SESSIONS`
 
 根据节点用途设置：
 
@@ -222,6 +226,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_export_history.ps1 .env.m
 ```powershell
 .venv\Scripts\python.exe -m xauusd_ai_system.cli --config configs\mvp.yaml acceptance .\tmp\xauusd_m1_history.csv
 ```
+
+当前 `configs/mvp.yaml` 默认研究收缩值为：
+
+- 关闭 `breakout`
+- 允许 `eu / overlap / us`
+
+这样做是为了先验证“禁 `asia` + 关 breakout”是否足以修复基线，而不是直接切成“只做 us”。
 
 ### 研究验收归档导入
 

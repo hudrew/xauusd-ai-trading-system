@@ -84,6 +84,14 @@ class VolatilityMonitorConfig:
 
 
 @dataclass
+class RoutingConfig:
+    enabled_strategies: tuple[str, ...] = ()
+    disabled_strategies: tuple[str, ...] = ()
+    allowed_sessions: tuple[str, ...] = ()
+    blocked_sessions: tuple[str, ...] = ()
+
+
+@dataclass
 class BacktestConfig:
     initial_cash: float = 10_000.0
     commission: float = 0.0
@@ -222,6 +230,7 @@ class SystemConfig:
     volatility_monitor: VolatilityMonitorConfig = field(
         default_factory=VolatilityMonitorConfig
     )
+    routing: RoutingConfig = field(default_factory=RoutingConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
     acceptance: AcceptanceConfig = field(default_factory=AcceptanceConfig)
     report_archive: ReportArchiveConfig = field(default_factory=ReportArchiveConfig)
@@ -268,6 +277,13 @@ def load_system_config(path: str | Path | None = None) -> SystemConfig:
     if not isinstance(raw, dict):
         raise ValueError("Config file must contain a top-level mapping.")
     return _apply_environment_overrides(_merge_dataclass(config, raw))
+
+
+def _parse_csv_env(value: str | None) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    items = [item.strip().lower() for item in value.split(",")]
+    return tuple(item for item in items if item)
 
 
 def _apply_environment_overrides(config: SystemConfig) -> SystemConfig:
@@ -426,6 +442,22 @@ def _apply_environment_overrides(config: SystemConfig) -> SystemConfig:
         config.volatility_monitor.spread_ratio_trigger = float(
             volatility_spread_ratio_trigger
         )
+
+    enabled_strategies = _parse_csv_env(os.getenv("XAUUSD_AI_ENABLED_STRATEGIES"))
+    if enabled_strategies:
+        config.routing.enabled_strategies = enabled_strategies
+
+    disabled_strategies = _parse_csv_env(os.getenv("XAUUSD_AI_DISABLED_STRATEGIES"))
+    if disabled_strategies:
+        config.routing.disabled_strategies = disabled_strategies
+
+    allowed_sessions = _parse_csv_env(os.getenv("XAUUSD_AI_ALLOWED_SESSIONS"))
+    if allowed_sessions:
+        config.routing.allowed_sessions = allowed_sessions
+
+    blocked_sessions = _parse_csv_env(os.getenv("XAUUSD_AI_BLOCKED_SESSIONS"))
+    if blocked_sessions:
+        config.routing.blocked_sessions = blocked_sessions
 
     if config.market_data.platform == "none" and config.execution.platform != "none":
         config.market_data.platform = config.execution.platform

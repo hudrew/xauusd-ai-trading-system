@@ -223,6 +223,36 @@ walk-forward：
 - `pullback` 有一定可用性
 - `breakout` 和非美盘时段需要重点收缩
 
+## 已完成的下一步代码动作
+
+基于上面的判断，仓库当前已补上统一 `routing` 准入层，并完成本地回归测试：
+
+- 新增按策略开关过滤候选信号
+- 新增按时段过滤候选信号
+- 候选信号即使被挡下，也会保留审计上下文
+- 回放 / 回测 / live 共用同一套准入口径
+- 新增环境变量覆盖：
+  - `XAUUSD_AI_ENABLED_STRATEGIES`
+  - `XAUUSD_AI_DISABLED_STRATEGIES`
+  - `XAUUSD_AI_ALLOWED_SESSIONS`
+  - `XAUUSD_AI_BLOCKED_SESSIONS`
+
+当前 `configs/mvp.yaml` 默认设置为：
+
+- `disabled_strategies = ["breakout"]`
+- `allowed_sessions = ["eu", "overlap", "us"]`
+
+说明：
+
+- 这里先不直接切成“只做 us”
+- 因为在当前验收规则下，这会让 `session_profit_concentration` 更容易固定为 `1.0`
+- 所以下一轮 VPS 复验应先验证“禁 asia + 关 breakout”是否已经足够改善基线
+
+本地状态：
+
+- 全量单元测试已通过
+- 下一步待在 VPS 上重新导出 / 复用历史数据并复跑 `acceptance`
+
 而不是：
 
 - “整套系统完全不可用”

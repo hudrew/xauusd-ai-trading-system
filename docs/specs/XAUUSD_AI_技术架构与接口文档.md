@@ -24,7 +24,7 @@
 
 ## 2. 数据流
 
-实时行情 / K 线 → `MarketDataService` → `LiveTradingRunner` → 特征计算 → 市场状态分类 → 策略生成信号 → 风控审核 → 执行下单 → 审计落库 / 告警 / 日志
+实时行情 / K 线 → `MarketDataService` → `LiveTradingRunner` → 特征计算 → 市场状态分类 → 策略生成候选信号 → 路由准入 → 风控审核 → 执行下单 → 审计落库 / 告警 / 日志
 
 账户权益 / 持仓数 / 交易可用状态 → `AccountStateService` → `LiveTradingRunner`
 
@@ -58,8 +58,8 @@
 ### 3.8 AlertNotifier
 职责：把高波动预警发送到企业微信 / Telegram / 邮件 / Webhook 等通道
 
-### 3.9 StrategyEngine
-职责：根据状态调用对应策略并输出交易信号
+### 3.9 StrategyEngine / StrategyRouter
+职责：根据状态调用对应策略，输出候选信号，并结合 `routing` 配置做策略与时段准入
 
 ### 3.10 RiskManager
 职责：在订单提交前做统一否决或放行
@@ -125,6 +125,7 @@
 ## 5. 设计原则
 
 - 策略和执行解耦
+- 候选信号与准入策略解耦
 - 行情和执行解耦
 - 风控独立且有最高优先级
 - 日志字段完整可追溯
@@ -147,6 +148,11 @@
 - `cTrader` 配置校验、订阅请求构建、执行适配器接口
 - `SQLiteAuditRepository` 审计落库
 - `AlertNotifier` Webhook / stdout 通知
+- `routing` 统一准入层，支持：
+  - 按时段过滤候选信号
+  - 按策略开关过滤候选信号
+  - 回测 / replay / live 共用同一套口径
+  - 环境变量快速覆盖
 
 当前仍需补完：
 

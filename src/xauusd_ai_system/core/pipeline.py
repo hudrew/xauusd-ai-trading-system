@@ -32,7 +32,8 @@ class TradingSystem:
                 MarketState.RANGE_MEAN_REVERSION: MeanReversionStrategy(
                     config.mean_reversion
                 ),
-            }
+            },
+            config=config.routing,
         )
         self.risk_manager = RiskManager(config.risk, config.volatility_monitor)
 
@@ -63,16 +64,45 @@ class TradingSystem:
 
         state = self.classifier.classify(snapshot)
         volatility = self.volatility_monitor.assess(snapshot)
-        signal = self.router.generate_signal(snapshot, state)
+        routing = self.router.generate_signal(snapshot, state)
+        signal = routing.signal
         risk = self.risk_manager.assess(snapshot, signal, account_state, volatility)
+        if signal is not None and routing.blocked_reasons:
+            state.reason_codes = [
+                *state.reason_codes,
+                *[
+                    reason
+                    for reason in routing.blocked_reasons
+                    if reason not in state.reason_codes
+                ],
+            ]
+            combined_reasons = [
+                *routing.blocked_reasons,
+                *[
+                    reason
+                    for reason in risk.risk_reason
+                    if reason not in routing.blocked_reasons
+                ],
+            ]
+            risk = RiskDecision(
+                allowed=False,
+                risk_reason=combined_reasons,
+                risk_per_unit=risk.risk_per_unit,
+                max_risk_amount=risk.max_risk_amount,
+                position_scale=risk.position_scale,
+                advisory=risk.advisory,
+            )
         state.blocked_by_risk = signal is not None and not risk.allowed
+        audit = {
+            "feature_validation": validation.valid,
+            "primary_volatility_level": volatility.primary_alert.warning_level.value,
+        }
+        if routing.audit:
+            audit["routing"] = routing.audit
         return TradingDecision(
             state=state,
             volatility=volatility,
             signal=signal,
             risk=risk,
-            audit={
-                "feature_validation": validation.valid,
-                "primary_volatility_level": volatility.primary_alert.warning_level.value,
-            },
+            audit=audit,
         )

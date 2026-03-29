@@ -96,6 +96,8 @@
 - `execution.platform`
 - `runtime.poll_interval_seconds`
 - `runtime.starting_equity`
+- `routing.enabled_strategies / disabled_strategies`
+- `routing.allowed_sessions / blocked_sessions`
 
 当前仓库已经提供：
 
@@ -117,6 +119,12 @@
 - Windows 宿主机自举脚本
 - Windows `Task Scheduler` 注册脚本
 - Windows 计划任务状态脚本
+
+当前研究默认值补充：
+
+- `configs/mvp.yaml` 已默认关闭 `breakout`
+- `configs/mvp.yaml` 已默认只放行 `eu / overlap / us`
+- 当前不直接改成“只做 us”，因为会与现有 `session_profit_concentration` 验收规则冲突
 
 建议本地准备：
 
@@ -148,6 +156,11 @@
 - 如果本机 `pip install MetaTrader5` 无法成功，说明本机不适合作为 MT5 真实执行宿主机
 - 此时建议把当前仓库继续作为研发与编排节点，另准备一台可安装 MT5 Python 依赖的执行宿主机
 - 在真正切换到执行宿主机前，可以先按 `docs/implementation/local_mt5_manual_debug.md` 做终端层面的手工联调
+- 如需临时调整研究收缩参数，可优先使用环境变量：
+  - `XAUUSD_AI_ENABLED_STRATEGIES`
+  - `XAUUSD_AI_DISABLED_STRATEGIES`
+  - `XAUUSD_AI_ALLOWED_SESSIONS`
+  - `XAUUSD_AI_BLOCKED_SESSIONS`
 
 建议上线脚本顺序：
 

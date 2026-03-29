@@ -22,6 +22,10 @@ class ConfigSchemaEnvOverrideTests(unittest.TestCase):
             "XAUUSD_AI_RISK_MAX_SPREAD_RATIO": "1.33",
             "XAUUSD_AI_STATE_SPREAD_RATIO_MAX": "1.44",
             "XAUUSD_AI_VOLATILITY_SPREAD_RATIO_TRIGGER": "1.17",
+            "XAUUSD_AI_ENABLED_STRATEGIES": "pullback,mean_reversion",
+            "XAUUSD_AI_DISABLED_STRATEGIES": "breakout",
+            "XAUUSD_AI_ALLOWED_SESSIONS": "eu, overlap, us",
+            "XAUUSD_AI_BLOCKED_SESSIONS": "asia",
         }
 
         with patch.dict(os.environ, env, clear=True):
@@ -33,6 +37,10 @@ class ConfigSchemaEnvOverrideTests(unittest.TestCase):
         self.assertEqual(config.risk.max_spread_ratio, 1.33)
         self.assertEqual(config.state_thresholds.spread_ratio_max, 1.44)
         self.assertEqual(config.volatility_monitor.spread_ratio_trigger, 1.17)
+        self.assertEqual(config.routing.enabled_strategies, ("pullback", "mean_reversion"))
+        self.assertEqual(config.routing.disabled_strategies, ("breakout",))
+        self.assertEqual(config.routing.allowed_sessions, ("eu", "overlap", "us"))
+        self.assertEqual(config.routing.blocked_sessions, ("asia",))
 
     def test_environment_tuning_overrides_yaml_values(self) -> None:
         config_text = textwrap.dedent(
@@ -43,6 +51,9 @@ class ConfigSchemaEnvOverrideTests(unittest.TestCase):
               max_spread_ratio: 1.50
             volatility_monitor:
               spread_ratio_trigger: 1.30
+            routing:
+              enabled_strategies: ["breakout", "pullback"]
+              allowed_sessions: ["us"]
             execution:
               mt5:
                 deviation: 20
@@ -61,6 +72,10 @@ class ConfigSchemaEnvOverrideTests(unittest.TestCase):
             "XAUUSD_AI_RISK_MAX_SPREAD_RATIO": "1.39",
             "XAUUSD_AI_STATE_SPREAD_RATIO_MAX": "1.48",
             "XAUUSD_AI_VOLATILITY_SPREAD_RATIO_TRIGGER": "1.19",
+            "XAUUSD_AI_ENABLED_STRATEGIES": "pullback,mean_reversion",
+            "XAUUSD_AI_DISABLED_STRATEGIES": "breakout",
+            "XAUUSD_AI_ALLOWED_SESSIONS": "eu,us",
+            "XAUUSD_AI_BLOCKED_SESSIONS": "asia",
         }
 
         try:
@@ -75,6 +90,10 @@ class ConfigSchemaEnvOverrideTests(unittest.TestCase):
         self.assertEqual(config.risk.max_spread_ratio, 1.39)
         self.assertEqual(config.state_thresholds.spread_ratio_max, 1.48)
         self.assertEqual(config.volatility_monitor.spread_ratio_trigger, 1.19)
+        self.assertEqual(config.routing.enabled_strategies, ("pullback", "mean_reversion"))
+        self.assertEqual(config.routing.disabled_strategies, ("breakout",))
+        self.assertEqual(config.routing.allowed_sessions, ("eu", "us"))
+        self.assertEqual(config.routing.blocked_sessions, ("asia",))
 
 
 if __name__ == "__main__":

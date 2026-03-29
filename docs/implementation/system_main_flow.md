@@ -12,9 +12,10 @@ flowchart LR
     D --> E["MarketStateClassifier"]
     D --> F["VolatilityMonitor"]
     E --> G["StrategyRouter"]
+    G --> G2["RoutingPolicy<br/>session + strategy gating"]
     F --> H["AlertNotifier"]
     F --> I["RiskManager"]
-    G --> I["RiskManager"]
+    G2 --> I["RiskManager"]
     I --> J["ExecutionService"]
     I --> K["SQLiteAuditRepository / Logger"]
     H --> K["SQLiteAuditRepository / Logger"]
@@ -94,15 +95,33 @@ flowchart LR
 - 原因码
 - 建议动作
 
-### 5. 策略生成
+### 5. 策略生成与准入
 
-只有在状态允许时，策略模块才生成信号。
+只有在状态允许时，策略模块才生成候选信号。
 
 例如：
 - `trend_breakout` 调用突破策略
 - `pullback_continuation` 调用回踩延续策略
 - `range_mean_reversion` 调用区间回归策略
 - `no_trade` 不允许新开仓
+
+候选信号生成后，还要再经过一层统一准入：
+
+- 按 `routing.allowed_sessions / blocked_sessions` 做时段放行
+- 按 `routing.enabled_strategies / disabled_strategies` 做策略开关放行
+- 即使候选信号被挡下，也会保留审计上下文，便于回测和复盘
+
+当前研究默认值：
+
+- 暂时关闭 `breakout`
+- 暂时不做 `asia`
+- 先保留 `eu / overlap / us`
+
+这一步的原因不是“拍脑袋收缩”，而是基于 MT5 `40k bars` 基线：
+
+- `asia` 明显拖累收益
+- `breakout` 当前弱于 `pullback`
+- 如果直接切成“只做 us”，会和现有 `session_profit_concentration` 验收规则冲突
 
 ### 6. 风控审核
 
@@ -258,6 +277,11 @@ flowchart LR
 
 ### 状态节点
 - 状态切换是否稳定
+
+### 路由准入节点
+- 时段过滤是否和验收口径一致
+- 策略开关是否可以无代码变更地调整
+- 候选信号被拦截时是否仍可审计
 - 是否和策略适配
 
 ### 预警节点
