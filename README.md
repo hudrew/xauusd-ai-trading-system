@@ -212,6 +212,8 @@ cd xauusd-ai-trading-system
 - `routing.disabled_strategies = ["breakout"]`
 - `routing.allowed_sessions = ["eu", "overlap", "us"]`
 
+当前 `configs/mt5_paper.yaml` 与 `configs/mt5_prod.yaml` 也已经同步到同一默认口径，避免研究、联调、上线三套配置出现偏差。
+
 如果需要临时覆盖，也可以直接用环境变量：
 
 - `XAUUSD_AI_ENABLED_STRATEGIES`

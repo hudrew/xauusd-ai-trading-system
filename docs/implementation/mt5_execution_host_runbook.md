@@ -234,6 +234,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_export_history.ps1 .env.m
 
 这样做是为了先验证“禁 `asia` + 关 breakout”是否足以修复基线，而不是直接切成“只做 us”。
 
+当前 `configs/mt5_paper.yaml` 和 `configs/mt5_prod.yaml` 也已经同步为同样的 `routing` 默认值，避免研究口径和 live 口径漂移。
+
 ### 研究验收归档导入
 
 如果研究回测不在这台 Windows 宿主机上执行，而是在本地研发机完成，先把研究报告导入当前宿主机：

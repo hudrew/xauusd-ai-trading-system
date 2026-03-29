@@ -50,6 +50,16 @@ mean_reversion:
   midline_target_weight: 1.00
   max_hold_bars: 12
 
+routing:
+  enabled_strategies: []
+  disabled_strategies:
+    - "breakout"
+  allowed_sessions:
+    - "eu"
+    - "overlap"
+    - "us"
+  blocked_sessions: []
+
 volatility_monitor:
   horizons_minutes: [5, 15, 30]
   atr_expansion_trigger: 1.18
