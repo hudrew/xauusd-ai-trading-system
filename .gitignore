@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+build/
+dist/
+*.egg-info/
+*.pyc
+*.pyo
+*.pyd
+*.log
+.DS_Store
+tmp/
+var/
+.vscode/
+.idea/
+.env.mt5.local

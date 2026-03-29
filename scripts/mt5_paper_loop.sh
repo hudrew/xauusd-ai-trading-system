@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/_mt5_common.sh"
+
+ENV_FILE="${1:-${DEFAULT_ENV_FILE}}"
+
+ensure_venv
+load_env_file "${ENV_FILE}"
+run_cli "${ROOT_DIR}/configs/mt5_paper.yaml" live-loop --require-deploy-gate --require-preflight "${@:2}"
