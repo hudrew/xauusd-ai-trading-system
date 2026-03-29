@@ -9,6 +9,19 @@
 - 生产方向优先，不靠伪代码验证
 - 研究、回测、生产三条链路共用同一套业务内核
 
+## GitHub 仓库
+
+当前远端仓库：
+
+- `https://github.com/hudrew/xauusd-ai-trading-system`
+
+Windows VPS / 执行宿主机可以直接这样拉取：
+
+```bash
+git clone https://github.com/hudrew/xauusd-ai-trading-system.git
+cd xauusd-ai-trading-system
+```
+
 ## 当前结论
 
 - `Backtrader` 继续作为研究 / 回测底座

@@ -148,8 +148,8 @@
 在 Windows PowerShell 里执行：
 
 ```powershell
-git clone <your-repo-url>
-cd 黄金全流程量化交易系统
+git clone https://github.com/hudrew/xauusd-ai-trading-system.git
+cd xauusd-ai-trading-system
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_bootstrap.ps1
 ```
 

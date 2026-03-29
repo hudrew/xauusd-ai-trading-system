@@ -52,8 +52,8 @@ flowchart LR
 ### 2. 拉取仓库
 
 ```bash
-git clone <your-repo-or-local-copy>
-cd 黄金全流程量化交易系统
+git clone https://github.com/hudrew/xauusd-ai-trading-system.git
+cd xauusd-ai-trading-system
 python -m venv .venv
 ```
 
