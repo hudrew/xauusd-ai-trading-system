@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -79,6 +81,32 @@ class MT5HostCheckRunnerTests(unittest.TestCase):
         self.assertFalse(report.ready)
         version_check = next(item for item in report.checks if item.name == "python_version")
         self.assertFalse(version_check.passed)
+
+    def test_runner_uses_process_environment_when_env_not_provided(self) -> None:
+        config = SystemConfig()
+        with patch.dict(
+            os.environ,
+            {
+                "XAUUSD_AI_MT5_LOGIN": "123456",
+                "XAUUSD_AI_MT5_PASSWORD": "secret",
+                "XAUUSD_AI_MT5_SERVER": "Broker-Server",
+                "XAUUSD_AI_MT5_PATH": "C:/terminal64.exe",
+            },
+            clear=False,
+        ):
+            runner = MT5HostCheckRunner(
+                config,
+                system_name="Windows",
+                machine="AMD64",
+                python_version=(3, 10, 0),
+                module_available=lambda name: True,
+                path_exists=lambda path: True,
+            )
+
+            report = runner.run()
+
+        self.assertTrue(report.ready)
+        self.assertTrue(all(item.passed for item in report.checks))
 
 
 if __name__ == "__main__":

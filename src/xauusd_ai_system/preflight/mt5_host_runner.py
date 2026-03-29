@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 import platform
 import sys
@@ -34,7 +35,7 @@ class MT5HostCheckRunner:
         system_name = (self.system_name or platform.system()).strip()
         machine = (self.machine or platform.machine()).strip()
         python_version = self.python_version or sys.version_info[:3]
-        env = self.env or {}
+        env = self.env if self.env is not None else os.environ
 
         checks: list[PreflightCheck] = []
 
