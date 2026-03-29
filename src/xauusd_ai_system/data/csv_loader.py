@@ -40,7 +40,8 @@ class CSVMarketDataLoader:
             raise ValueError(f"CSV data is missing required columns: {sorted(missing)}")
 
         frame = frame.copy()
-        frame["timestamp"] = pd.to_datetime(frame["timestamp"], utc=False)
+        parsed_timestamp = pd.to_datetime(frame["timestamp"], utc=True)
+        frame["timestamp"] = parsed_timestamp.dt.tz_localize(None)
         frame = frame.sort_values("timestamp").drop_duplicates("timestamp")
         frame["symbol"] = frame.get("symbol", symbol)
 
