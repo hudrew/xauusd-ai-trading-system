@@ -54,7 +54,12 @@ function Convert-SerializedDateValue {
     }
 
     if ($Value -is [datetime]) {
-        return [datetime]$Value
+        $dateValue = [datetime]$Value
+        if ($dateValue.Kind -eq [System.DateTimeKind]::Utc) {
+            return $dateValue.ToLocalTime()
+        }
+
+        return $dateValue
     }
 
     $text = ([string]$Value).Trim()
