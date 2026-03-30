@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ..config.schema import ExecutionConfig
 from ..core.models import RiskDecision, TradeSignal
-from .base import ExecutionAdapter, ExecutionOrder, ExecutionResult
+from .base import ExecutionAdapter, ExecutionOrder, ExecutionResult, ExecutionSyncResult
 from .factory import build_execution_adapter
 
 
@@ -24,3 +24,21 @@ class ExecutionService:
         if self.adapter is None:
             raise RuntimeError("Execution platform is not configured.")
         return self.adapter.submit_order(order)
+
+    def sync_execution_state(
+        self,
+        *,
+        order: ExecutionOrder,
+        execution_result: ExecutionResult,
+    ) -> ExecutionSyncResult | None:
+        if self.adapter is None:
+            return None
+        return self.adapter.sync_execution_state(
+            order=order,
+            execution_result=execution_result,
+        )
+
+    def reconcile_execution_state(self, *, symbol: str) -> ExecutionSyncResult | None:
+        if self.adapter is None:
+            return None
+        return self.adapter.reconcile_execution_state(symbol=symbol)

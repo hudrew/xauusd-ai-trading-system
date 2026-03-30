@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 import math
 from typing import Any
 
 from ..config.schema import ExecutionConfig
 from ..core.models import RiskDecision, TradeSignal
-from .base import ExecutionAdapter, ExecutionOrder, ExecutionResult
+from .base import ExecutionAdapter, ExecutionOrder, ExecutionResult, ExecutionSyncResult
 
 
 class MT5ExecutionAdapter(ExecutionAdapter):
@@ -52,12 +53,7 @@ class MT5ExecutionAdapter(ExecutionAdapter):
     def submit_order(self, order: ExecutionOrder) -> ExecutionResult:
         mt5 = self._mt5()
 
-        if not mt5.initialize(
-            path=self.config.mt5.path,
-            login=self.config.mt5.login,
-            password=self.config.mt5.password,
-            server=self.config.mt5.server,
-        ):
+        if not self._initialize_terminal(mt5):
             return ExecutionResult(
                 accepted=False,
                 platform=self.platform,
@@ -126,6 +122,302 @@ class MT5ExecutionAdapter(ExecutionAdapter):
             error_message=None if accepted else str(raw_response),
         )
 
+    def sync_execution_state(
+        self,
+        *,
+        order: ExecutionOrder,
+        execution_result: ExecutionResult,
+    ) -> ExecutionSyncResult:
+        return self._capture_execution_state(
+            symbol=order.symbol,
+            requested_order_id=execution_result.order_id,
+            requested_price=self._float_or_none(order.payload.get("price")),
+            accepted=execution_result.accepted,
+            order_payload=order.payload,
+            execution_result=execution_result,
+            sync_origin="submission",
+            use_recent_history=False,
+        )
+
+    def reconcile_execution_state(
+        self,
+        *,
+        symbol: str,
+    ) -> ExecutionSyncResult:
+        return self._capture_execution_state(
+            symbol=symbol,
+            requested_order_id=None,
+            requested_price=None,
+            accepted=True,
+            order_payload=None,
+            execution_result=None,
+            sync_origin="reconcile",
+            use_recent_history=True,
+        )
+
+    def _capture_execution_state(
+        self,
+        *,
+        symbol: str,
+        requested_order_id: str | None,
+        requested_price: float | None,
+        accepted: bool,
+        order_payload: dict[str, Any] | None,
+        execution_result: ExecutionResult | None,
+        sync_origin: str,
+        use_recent_history: bool,
+    ) -> ExecutionSyncResult:
+        mt5 = self._mt5()
+        if not self._initialize_terminal(mt5):
+            return ExecutionSyncResult(
+                platform=self.platform,
+                symbol=symbol,
+                requested_order_id=requested_order_id,
+                accepted=False if sync_origin == "reconcile" else accepted,
+                sync_status="sync_initialize_failed",
+                sync_origin=sync_origin,
+                requested_price=requested_price,
+                error_message=f"mt5.initialize failed: {mt5.last_error()}",
+            )
+
+        try:
+            if not mt5.symbol_select(symbol, True):
+                return ExecutionSyncResult(
+                    platform=self.platform,
+                    symbol=symbol,
+                    requested_order_id=requested_order_id,
+                    accepted=False if sync_origin == "reconcile" else accepted,
+                    sync_status="sync_symbol_select_failed",
+                    sync_origin=sync_origin,
+                    requested_price=requested_price,
+                    error_message=f"symbol_select failed for {symbol}",
+                )
+
+            symbol_info = mt5.symbol_info(symbol)
+            point_value = self._point_value(symbol_info) if symbol_info is not None else 0.0
+            orders_get = getattr(mt5, "orders_get", None)
+            if orders_get is None:
+                return ExecutionSyncResult(
+                    platform=self.platform,
+                    symbol=symbol,
+                    requested_order_id=requested_order_id,
+                    accepted=False if sync_origin == "reconcile" else accepted,
+                    sync_status="sync_orders_get_unsupported",
+                    sync_origin=sync_origin,
+                    requested_price=requested_price,
+                    error_message="mt5.orders_get is unavailable",
+                )
+
+            positions_get = getattr(mt5, "positions_get", None)
+            if positions_get is None:
+                return ExecutionSyncResult(
+                    platform=self.platform,
+                    symbol=symbol,
+                    requested_order_id=requested_order_id,
+                    accepted=False if sync_origin == "reconcile" else accepted,
+                    sync_status="sync_positions_get_unsupported",
+                    sync_origin=sync_origin,
+                    requested_price=requested_price,
+                    error_message="mt5.positions_get is unavailable",
+                )
+
+            open_orders_raw = orders_get(symbol=symbol)
+            if open_orders_raw is None:
+                return ExecutionSyncResult(
+                    platform=self.platform,
+                    symbol=symbol,
+                    requested_order_id=requested_order_id,
+                    accepted=False if sync_origin == "reconcile" else accepted,
+                    sync_status="sync_orders_get_failed",
+                    sync_origin=sync_origin,
+                    requested_price=requested_price,
+                    error_message=f"orders_get failed for {symbol}: {mt5.last_error()}",
+                )
+
+            open_positions_raw = positions_get(symbol=symbol)
+            if open_positions_raw is None:
+                return ExecutionSyncResult(
+                    platform=self.platform,
+                    symbol=symbol,
+                    requested_order_id=requested_order_id,
+                    accepted=False if sync_origin == "reconcile" else accepted,
+                    sync_status="sync_positions_get_failed",
+                    sync_origin=sync_origin,
+                    requested_price=requested_price,
+                    error_message=f"positions_get failed for {symbol}: {mt5.last_error()}",
+                )
+
+            filtered_orders = self._sorted_records(
+                self._filter_orders(
+                    open_orders_raw,
+                    symbol=symbol,
+                    requested_order_id=requested_order_id,
+                )
+            )
+            filtered_positions = self._sorted_records(
+                self._filter_positions(
+                    open_positions_raw,
+                    symbol=symbol,
+                )
+            )
+            if use_recent_history or requested_order_id is None:
+                history_orders_raw, history_orders_error = self._load_recent_history_orders(
+                    mt5,
+                    symbol=symbol,
+                )
+                history_deals_raw, history_deals_error = self._load_recent_history_deals(
+                    mt5,
+                    symbol=symbol,
+                )
+            else:
+                history_orders_raw, history_orders_error = self._load_history_orders(
+                    mt5,
+                    requested_order_id=requested_order_id,
+                )
+                history_deals_raw, history_deals_error = self._load_history_deals(
+                    mt5,
+                    requested_order_id=requested_order_id,
+                )
+            filtered_history_orders = self._sorted_records(
+                self._filter_orders(
+                    history_orders_raw,
+                    symbol=symbol,
+                    requested_order_id=requested_order_id,
+                )
+            )
+            filtered_history_deals = self._sorted_records(
+                self._filter_deals(
+                    history_deals_raw,
+                    symbol=symbol,
+                    requested_order_id=requested_order_id,
+                )
+            )
+
+            resolved_requested_order_id = self._resolve_requested_order_id(
+                requested_order_id=requested_order_id,
+                filtered_orders=filtered_orders,
+                filtered_history_orders=filtered_history_orders,
+                filtered_history_deals=filtered_history_deals,
+            )
+
+            history_order_state = self._describe_order_state(
+                mt5,
+                self._value_from_records(filtered_history_orders, keys=("state",)),
+            )
+            history_deal_ticket = self._string_from_records(
+                filtered_history_deals,
+                keys=("ticket",),
+            )
+            history_deal_entry = self._describe_deal_entry(
+                mt5,
+                self._value_from_records(filtered_history_deals, keys=("entry",)),
+            )
+            history_deal_reason = self._describe_deal_reason(
+                mt5,
+                self._value_from_records(filtered_history_deals, keys=("reason",)),
+            )
+            sync_status = self._resolve_sync_status(
+                sync_origin=sync_origin,
+                accepted=accepted,
+                filtered_orders=filtered_orders,
+                filtered_positions=filtered_positions,
+                filtered_history_orders=filtered_history_orders,
+                filtered_history_deals=filtered_history_deals,
+                requested_order_id=resolved_requested_order_id,
+                total_open_orders=len(open_orders_raw),
+                total_open_positions=len(open_positions_raw),
+                history_order_state=history_order_state,
+                history_deal_entry=history_deal_entry,
+                history_deal_reason=history_deal_reason,
+            )
+            observed_price, observed_price_source = self._resolve_observed_price(
+                filtered_orders=filtered_orders,
+                filtered_positions=filtered_positions,
+                filtered_history_orders=filtered_history_orders,
+                filtered_history_deals=filtered_history_deals,
+                execution_result=execution_result,
+            )
+            position_ticket = self._string_from_records(
+                filtered_positions,
+                keys=("ticket",),
+            )
+            position_identifier = self._string_from_records(
+                filtered_positions,
+                keys=("identifier", "ticket"),
+            ) or self._string_from_records(
+                filtered_history_deals,
+                keys=("position_id", "position"),
+            ) or self._string_from_records(
+                filtered_history_orders,
+                keys=("position_id",),
+            )
+            price_offset = self._calculate_price_offset(
+                requested_price=requested_price,
+                observed_price=observed_price,
+            )
+            adverse_slippage = self._calculate_adverse_slippage(
+                side=self._resolve_order_side(order_payload or {}),
+                price_offset=price_offset,
+            )
+            adverse_slippage_points = (
+                round(adverse_slippage / point_value, 2)
+                if adverse_slippage is not None and point_value > 0
+                else None
+            )
+            return ExecutionSyncResult(
+                platform=self.platform,
+                symbol=symbol,
+                requested_order_id=resolved_requested_order_id,
+                accepted=accepted,
+                sync_status=sync_status,
+                sync_origin=sync_origin,
+                requested_price=requested_price,
+                observed_price=observed_price,
+                observed_price_source=observed_price_source,
+                position_ticket=position_ticket,
+                position_identifier=position_identifier,
+                history_order_state=history_order_state,
+                history_deal_ticket=history_deal_ticket,
+                history_deal_entry=history_deal_entry,
+                history_deal_reason=history_deal_reason,
+                price_offset=price_offset,
+                adverse_slippage=adverse_slippage,
+                adverse_slippage_points=adverse_slippage_points,
+                open_orders=filtered_orders,
+                open_positions=filtered_positions,
+                history_orders=filtered_history_orders,
+                history_deals=filtered_history_deals,
+                raw_response={
+                    "open_orders_total": len(open_orders_raw),
+                    "open_positions_total": len(open_positions_raw),
+                    "history_orders_total": len(history_orders_raw),
+                    "history_deals_total": len(history_deals_raw),
+                    "requested_order_id": resolved_requested_order_id,
+                    "sync_origin": sync_origin,
+                    "requested_price": requested_price,
+                    "observed_price": observed_price,
+                    "observed_price_source": observed_price_source,
+                    "position_ticket": position_ticket,
+                    "position_identifier": position_identifier,
+                    "history_order_state": history_order_state,
+                    "history_deal_ticket": history_deal_ticket,
+                    "history_deal_entry": history_deal_entry,
+                    "history_deal_reason": history_deal_reason,
+                    "price_offset": price_offset,
+                    "adverse_slippage": adverse_slippage,
+                    "adverse_slippage_points": adverse_slippage_points,
+                    "history_orders_error": history_orders_error,
+                    "history_deals_error": history_deals_error,
+                },
+                error_message=(
+                    None
+                    if execution_result is None or execution_result.accepted
+                    else execution_result.error_message
+                ),
+            )
+        finally:
+            mt5.shutdown()
+
     def _mt5(self) -> Any:
         if self._mt5_module is not None:
             return self._mt5_module
@@ -136,6 +428,16 @@ class MT5ExecutionAdapter(ExecutionAdapter):
                 "MetaTrader5 is not installed. Install execution dependencies first."
             ) from exc
         return mt5
+
+    def _initialize_terminal(self, mt5: Any) -> bool:
+        return bool(
+            mt5.initialize(
+                path=self.config.mt5.path,
+                login=self.config.mt5.login,
+                password=self.config.mt5.password,
+                server=self.config.mt5.server,
+            )
+        )
 
     @staticmethod
     def _resolve_mt5_constants(mt5: Any, payload: dict[str, Any]) -> dict[str, Any]:
@@ -294,3 +596,556 @@ class MT5ExecutionAdapter(ExecutionAdapter):
             getattr(mt5, "TRADE_RETCODE_DONE_PARTIAL", None),
         }
         return retcode in accepted_codes
+
+    def _filter_orders(
+        self,
+        records: Any,
+        *,
+        symbol: str,
+        requested_order_id: str | None,
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for record in records or ():
+            if not self._record_matches_order(
+                record,
+                symbol=symbol,
+                requested_order_id=requested_order_id,
+            ):
+                continue
+            rows.append(self._namedtuple_to_dict(record))
+        return rows
+
+    @staticmethod
+    def _sorted_records(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return sorted(
+            rows,
+            key=MT5ExecutionAdapter._record_sort_key,
+            reverse=True,
+        )
+
+    @staticmethod
+    def _record_sort_key(row: dict[str, Any]) -> tuple[int, float, str]:
+        for key in (
+            "time_msc",
+            "time_done_msc",
+            "time_setup_msc",
+            "time",
+            "time_done",
+            "time_setup",
+            "ticket",
+            "order",
+            "identifier",
+            "position_id",
+        ):
+            value = row.get(key)
+            if value in (None, ""):
+                continue
+            try:
+                return (1, float(value), "")
+            except (TypeError, ValueError):
+                return (0, 0.0, str(value))
+        return (0, 0.0, "")
+
+    def _filter_positions(
+        self,
+        records: Any,
+        *,
+        symbol: str,
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for record in records or ():
+            if not self._record_matches_position(record, symbol=symbol):
+                continue
+            rows.append(self._namedtuple_to_dict(record))
+        return rows
+
+    def _filter_deals(
+        self,
+        records: Any,
+        *,
+        symbol: str,
+        requested_order_id: str | None,
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for record in records or ():
+            if not self._record_matches_deal(
+                record,
+                symbol=symbol,
+                requested_order_id=requested_order_id,
+            ):
+                continue
+            rows.append(self._namedtuple_to_dict(record))
+        return rows
+
+    def _record_matches_order(
+        self,
+        record: Any,
+        *,
+        symbol: str,
+        requested_order_id: str | None,
+    ) -> bool:
+        if self._string_attr(record, "symbol") != symbol:
+            return False
+        if requested_order_id and self._record_has_ticket(record, requested_order_id):
+            return True
+        return self._record_matches_magic_or_comment(record)
+
+    def _record_matches_position(
+        self,
+        record: Any,
+        *,
+        symbol: str,
+    ) -> bool:
+        if self._string_attr(record, "symbol") != symbol:
+            return False
+        return self._record_matches_magic_or_comment(record)
+
+    def _record_matches_deal(
+        self,
+        record: Any,
+        *,
+        symbol: str,
+        requested_order_id: str | None,
+    ) -> bool:
+        if self._string_attr(record, "symbol") != symbol:
+            return False
+        if requested_order_id and self._record_has_ticket(record, requested_order_id):
+            return True
+        return self._record_matches_magic_or_comment(record)
+
+    def _record_matches_magic_or_comment(self, record: Any) -> bool:
+        expected_magic = int(self.config.mt5.magic)
+        record_magic = getattr(record, "magic", None)
+        if record_magic is not None and int(record_magic) == expected_magic:
+            return True
+        comment = self._string_attr(record, "comment")
+        return comment.startswith(f"{self.config.order_comment_prefix}:")
+
+    @staticmethod
+    def _record_has_ticket(record: Any, requested_order_id: str) -> bool:
+        for attr in ("ticket", "order", "identifier"):
+            value = getattr(record, attr, None)
+            if value is not None and str(value) == str(requested_order_id):
+                return True
+        return False
+
+    @staticmethod
+    def _string_attr(record: Any, name: str) -> str:
+        value = getattr(record, name, "")
+        return str(value or "")
+
+    @staticmethod
+    def _resolve_requested_order_id(
+        *,
+        requested_order_id: str | None,
+        filtered_orders: list[dict[str, Any]],
+        filtered_history_orders: list[dict[str, Any]],
+        filtered_history_deals: list[dict[str, Any]],
+    ) -> str | None:
+        return (
+            requested_order_id
+            or MT5ExecutionAdapter._string_from_records(
+                filtered_orders,
+                keys=("ticket", "order"),
+            )
+            or MT5ExecutionAdapter._string_from_records(
+                filtered_history_orders,
+                keys=("ticket",),
+            )
+            or MT5ExecutionAdapter._string_from_records(
+                filtered_history_deals,
+                keys=("order", "position_id", "ticket"),
+            )
+        )
+
+    @staticmethod
+    def _resolve_sync_status(
+        *,
+        sync_origin: str,
+        accepted: bool,
+        filtered_orders: list[dict[str, Any]],
+        filtered_positions: list[dict[str, Any]],
+        filtered_history_orders: list[dict[str, Any]],
+        filtered_history_deals: list[dict[str, Any]],
+        requested_order_id: str | None,
+        total_open_orders: int,
+        total_open_positions: int,
+        history_order_state: str | None,
+        history_deal_entry: str | None,
+        history_deal_reason: str | None,
+    ) -> str:
+        if sync_origin == "reconcile":
+            return MT5ExecutionAdapter._resolve_reconcile_sync_status(
+                filtered_orders=filtered_orders,
+                filtered_positions=filtered_positions,
+                filtered_history_orders=filtered_history_orders,
+                filtered_history_deals=filtered_history_deals,
+                history_order_state=history_order_state,
+                history_deal_entry=history_deal_entry,
+                history_deal_reason=history_deal_reason,
+            )
+        return MT5ExecutionAdapter._resolve_submission_sync_status(
+            accepted=accepted,
+            filtered_orders=filtered_orders,
+            filtered_positions=filtered_positions,
+            filtered_history_orders=filtered_history_orders,
+            filtered_history_deals=filtered_history_deals,
+            requested_order_id=requested_order_id,
+            total_open_orders=total_open_orders,
+            total_open_positions=total_open_positions,
+        )
+
+    @staticmethod
+    def _resolve_submission_sync_status(
+        *,
+        accepted: bool,
+        filtered_orders: list[dict[str, Any]],
+        filtered_positions: list[dict[str, Any]],
+        filtered_history_orders: list[dict[str, Any]],
+        filtered_history_deals: list[dict[str, Any]],
+        requested_order_id: str | None,
+        total_open_orders: int,
+        total_open_positions: int,
+    ) -> str:
+        if not accepted:
+            return "rejected"
+        if filtered_positions:
+            return "position_open"
+        if filtered_orders:
+            return "order_open"
+        if filtered_history_deals:
+            return "deal_recorded"
+        if filtered_history_orders:
+            return "history_order_recorded"
+        if requested_order_id and (total_open_orders > 0 or total_open_positions > 0):
+            return "accepted_unmatched"
+        return "accepted_not_visible"
+
+    @staticmethod
+    def _resolve_reconcile_sync_status(
+        *,
+        filtered_orders: list[dict[str, Any]],
+        filtered_positions: list[dict[str, Any]],
+        filtered_history_orders: list[dict[str, Any]],
+        filtered_history_deals: list[dict[str, Any]],
+        history_order_state: str | None,
+        history_deal_entry: str | None,
+        history_deal_reason: str | None,
+    ) -> str:
+        if filtered_positions:
+            return "position_open"
+        if filtered_orders:
+            return "order_open"
+        if history_deal_entry in {"deal_entry_out", "deal_entry_out_by"}:
+            if history_deal_reason == "deal_reason_tp":
+                return "position_closed_tp"
+            if history_deal_reason == "deal_reason_sl":
+                return "position_closed_sl"
+            if history_deal_reason == "deal_reason_so":
+                return "position_closed_stopout"
+            if history_deal_reason in {
+                "deal_reason_client",
+                "deal_reason_mobile",
+                "deal_reason_web",
+            }:
+                return "position_closed_manual"
+            if history_deal_reason == "deal_reason_expert":
+                return "position_closed_expert"
+            return "position_closed"
+        if filtered_history_deals:
+            return "deal_recorded"
+        if history_order_state == "order_state_canceled":
+            return "order_canceled"
+        if history_order_state == "order_state_rejected":
+            return "order_rejected"
+        if filtered_history_orders:
+            return "history_order_recorded"
+        return "no_tracked_activity"
+
+    @staticmethod
+    def _resolve_observed_price(
+        *,
+        filtered_orders: list[dict[str, Any]],
+        filtered_positions: list[dict[str, Any]],
+        filtered_history_orders: list[dict[str, Any]],
+        filtered_history_deals: list[dict[str, Any]],
+        execution_result: ExecutionResult | None,
+    ) -> tuple[float | None, str | None]:
+        if filtered_history_deals:
+            price = MT5ExecutionAdapter._first_price(
+                filtered_history_deals[0],
+                keys=("price",),
+            )
+            if price is not None:
+                return price, "history_deal"
+        if filtered_positions:
+            price = MT5ExecutionAdapter._first_price(
+                filtered_positions[0],
+                keys=("price_open", "price_current", "price"),
+            )
+            if price is not None:
+                return price, "position_open"
+        if filtered_history_orders:
+            price = MT5ExecutionAdapter._first_price(
+                filtered_history_orders[0],
+                keys=("price_current", "price_open", "price"),
+            )
+            if price is not None:
+                return price, "history_order"
+        if filtered_orders:
+            price = MT5ExecutionAdapter._first_price(
+                filtered_orders[0],
+                keys=("price_open", "price_current", "price"),
+            )
+            if price is not None:
+                return price, "order_open"
+        if execution_result is not None and execution_result.raw_response:
+            price = MT5ExecutionAdapter._first_price(
+                execution_result.raw_response,
+                keys=("price",),
+            )
+            if price is not None:
+                return price, "execution_response"
+        return None, None
+
+    @staticmethod
+    def _first_price(record: dict[str, Any], *, keys: tuple[str, ...]) -> float | None:
+        for key in keys:
+            value = MT5ExecutionAdapter._float_or_none(record.get(key))
+            if value is not None:
+                return value
+        nested_request = record.get("request")
+        if isinstance(nested_request, dict):
+            for key in keys:
+                value = MT5ExecutionAdapter._float_or_none(nested_request.get(key))
+                if value is not None:
+                    return value
+        return None
+
+    @staticmethod
+    def _calculate_price_offset(
+        *,
+        requested_price: float | None,
+        observed_price: float | None,
+    ) -> float | None:
+        if requested_price is None or observed_price is None:
+            return None
+        return round(observed_price - requested_price, 6)
+
+    @staticmethod
+    def _calculate_adverse_slippage(
+        *,
+        side: str,
+        price_offset: float | None,
+    ) -> float | None:
+        if price_offset is None:
+            return None
+        normalized_side = side.upper()
+        if normalized_side == "BUY":
+            return round(max(price_offset, 0.0), 6)
+        if normalized_side == "SELL":
+            return round(max(-price_offset, 0.0), 6)
+        return None
+
+    @staticmethod
+    def _float_or_none(value: Any) -> float | None:
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _resolve_order_side(payload: dict[str, Any]) -> str:
+        for key in ("side", "type"):
+            value = payload.get(key)
+            if value not in (None, ""):
+                return str(value)
+        return ""
+
+    def _load_history_orders(
+        self,
+        mt5: Any,
+        *,
+        requested_order_id: str | None,
+    ) -> tuple[list[Any], str | None]:
+        history_orders_get = getattr(mt5, "history_orders_get", None)
+        if history_orders_get is None or requested_order_id is None:
+            return [], None
+        ticket = self._int_or_none(requested_order_id)
+        if ticket is None:
+            return [], f"history_orders_get skipped: invalid order id {requested_order_id}"
+        rows = history_orders_get(ticket=ticket)
+        if rows is None:
+            return [], f"history_orders_get failed for {ticket}: {mt5.last_error()}"
+        return list(rows), None
+
+    def _load_history_deals(
+        self,
+        mt5: Any,
+        *,
+        requested_order_id: str | None,
+    ) -> tuple[list[Any], str | None]:
+        history_deals_get = getattr(mt5, "history_deals_get", None)
+        if history_deals_get is None or requested_order_id is None:
+            return [], None
+        ticket = self._int_or_none(requested_order_id)
+        if ticket is None:
+            return [], f"history_deals_get skipped: invalid order id {requested_order_id}"
+        rows = history_deals_get(ticket=ticket)
+        if rows is None:
+            return [], f"history_deals_get failed for {ticket}: {mt5.last_error()}"
+        return list(rows), None
+
+    def _load_recent_history_orders(
+        self,
+        mt5: Any,
+        *,
+        symbol: str,
+    ) -> tuple[list[Any], str | None]:
+        history_orders_get = getattr(mt5, "history_orders_get", None)
+        if history_orders_get is None:
+            return [], "mt5.history_orders_get is unavailable"
+
+        window_end = datetime.now()
+        window_start = window_end - timedelta(
+            minutes=max(int(self.config.mt5.reconcile_history_minutes), 1)
+        )
+        try:
+            rows = history_orders_get(
+                window_start,
+                window_end,
+                group=f"*{symbol}*",
+            )
+        except TypeError:
+            rows = history_orders_get(window_start, window_end)
+        if rows is None:
+            return [], f"history_orders_get failed for {symbol}: {mt5.last_error()}"
+        return list(rows), None
+
+    def _load_recent_history_deals(
+        self,
+        mt5: Any,
+        *,
+        symbol: str,
+    ) -> tuple[list[Any], str | None]:
+        history_deals_get = getattr(mt5, "history_deals_get", None)
+        if history_deals_get is None:
+            return [], "mt5.history_deals_get is unavailable"
+
+        window_end = datetime.now()
+        window_start = window_end - timedelta(
+            minutes=max(int(self.config.mt5.reconcile_history_minutes), 1)
+        )
+        try:
+            rows = history_deals_get(
+                window_start,
+                window_end,
+                group=f"*{symbol}*",
+            )
+        except TypeError:
+            rows = history_deals_get(window_start, window_end)
+        if rows is None:
+            return [], f"history_deals_get failed for {symbol}: {mt5.last_error()}"
+        return list(rows), None
+
+    @staticmethod
+    def _int_or_none(value: Any) -> int | None:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _value_from_records(
+        rows: list[dict[str, Any]],
+        *,
+        keys: tuple[str, ...],
+    ) -> Any:
+        for row in rows:
+            for key in keys:
+                value = row.get(key)
+                if value not in (None, ""):
+                    return value
+        return None
+
+    @classmethod
+    def _string_from_records(
+        cls,
+        rows: list[dict[str, Any]],
+        *,
+        keys: tuple[str, ...],
+    ) -> str | None:
+        value = cls._value_from_records(rows, keys=keys)
+        if value in (None, ""):
+            return None
+        return str(value)
+
+    @classmethod
+    def _describe_order_state(cls, mt5: Any, value: Any) -> str | None:
+        return cls._describe_constant(
+            mt5,
+            value,
+            names=(
+                "ORDER_STATE_STARTED",
+                "ORDER_STATE_PLACED",
+                "ORDER_STATE_CANCELED",
+                "ORDER_STATE_PARTIAL",
+                "ORDER_STATE_FILLED",
+                "ORDER_STATE_REJECTED",
+                "ORDER_STATE_EXPIRED",
+                "ORDER_STATE_REQUEST_ADD",
+                "ORDER_STATE_REQUEST_MODIFY",
+                "ORDER_STATE_REQUEST_CANCEL",
+            ),
+        )
+
+    @classmethod
+    def _describe_deal_entry(cls, mt5: Any, value: Any) -> str | None:
+        return cls._describe_constant(
+            mt5,
+            value,
+            names=(
+                "DEAL_ENTRY_IN",
+                "DEAL_ENTRY_OUT",
+                "DEAL_ENTRY_INOUT",
+                "DEAL_ENTRY_OUT_BY",
+            ),
+        )
+
+    @classmethod
+    def _describe_deal_reason(cls, mt5: Any, value: Any) -> str | None:
+        return cls._describe_constant(
+            mt5,
+            value,
+            names=(
+                "DEAL_REASON_CLIENT",
+                "DEAL_REASON_MOBILE",
+                "DEAL_REASON_WEB",
+                "DEAL_REASON_EXPERT",
+                "DEAL_REASON_SL",
+                "DEAL_REASON_TP",
+                "DEAL_REASON_SO",
+                "DEAL_REASON_ROLLOVER",
+                "DEAL_REASON_VMARGIN",
+                "DEAL_REASON_SPLIT",
+            ),
+        )
+
+    @staticmethod
+    def _describe_constant(
+        mt5: Any,
+        value: Any,
+        *,
+        names: tuple[str, ...],
+    ) -> str | None:
+        if value in (None, ""):
+            return None
+        if isinstance(value, str):
+            return value
+        for name in names:
+            constant = getattr(mt5, name, None)
+            if constant is not None and constant == value:
+                return name.lower()
+        return str(value)

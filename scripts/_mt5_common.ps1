@@ -249,3 +249,27 @@ function Invoke-Mt5Cli {
         }
     }
 }
+
+function Get-Mt5MonitoringSnapshot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ConfigPath,
+        [int]$DecisionLimit = 40,
+        [int]$ExecutionLimit = 40,
+        [int]$StaleAfterSeconds = 120
+    )
+
+    Ensure-Venv
+    $snapshotJson = Invoke-Mt5Cli `
+        -ConfigPath $ConfigPath `
+        "monitoring" `
+        "snapshot" `
+        "--decision-limit" `
+        "$DecisionLimit" `
+        "--execution-limit" `
+        "$ExecutionLimit" `
+        "--stale-after-seconds" `
+        "$StaleAfterSeconds"
+
+    return ($snapshotJson | ConvertFrom-Json -Depth 8)
+}

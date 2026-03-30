@@ -109,6 +109,7 @@ copy .env.mt5.example .env.mt5.local
 - `XAUUSD_AI_RISK_CONTRACT_SIZE`
 - `XAUUSD_AI_MT5_DEVIATION`
 - `XAUUSD_AI_MT5_MAGIC`
+- `XAUUSD_AI_MT5_RECONCILE_HISTORY_MINUTES`
 - `XAUUSD_AI_RISK_MAX_SPREAD_RATIO`
 - `XAUUSD_AI_STATE_SPREAD_RATIO_MAX`
 - `XAUUSD_AI_VOLATILITY_SPREAD_RATIO_TRIGGER`
@@ -384,6 +385,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_prod_loop.ps1 .env.mt5.lo
 - 审计库里同时看到：
   - `evaluations`
   - `execution_attempts`
+  - `execution_syncs`
 
 ## 长期运行与自恢复
 
@@ -502,6 +504,23 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_unregister_task.ps1 -Mode
 - `var/` 或数据库中的审计记录
 - 结构化日志里的 `live_cycle_failed`
 - `execution_attempts` 表中的错误信息
+- `execution_syncs` 表中的：
+  - `sync_status`
+  - `payload_json.sync_result.sync_origin`
+  - `open_order_count`
+  - `open_position_count`
+  - `payload_json.sync_result.requested_price`
+  - `payload_json.sync_result.observed_price`
+  - `payload_json.sync_result.position_ticket`
+  - `payload_json.sync_result.position_identifier`
+  - `payload_json.sync_result.history_order_state`
+  - `payload_json.sync_result.history_deal_entry`
+  - `payload_json.sync_result.history_deal_reason`
+  - `payload_json.sync_result.price_offset`
+  - `payload_json.sync_result.adverse_slippage_points`
+  - `payload_json.sync_result.history_orders`
+  - `payload_json.sync_result.history_deals`
+  - `error_message`
 
 ## 当前阶段建议
 
@@ -511,3 +530,35 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_unregister_task.ps1 -Mode
 - 先完成 paper 到小资金 live 的闭环
 - 把高波动预警、风控缩仓、执行审计三条链一起验证
 - Windows 宿主机优先使用仓库内 `.ps1` 脚本作为标准启动入口
+
+当前补充：
+
+- `execution_attempts` 解决的是“有没有发出执行尝试”
+- `execution_syncs` 解决的是“发出后 broker 侧当前看到什么状态”
+- `execution_syncs` 现在分成两类来源：
+  - `submission`
+    表示下单后立即做的一次 broker 回读
+  - `reconcile`
+    表示 live loop 每轮做的一次 broker 周期对账
+- `reconcile` 结果只会在状态变化时新增写库，避免每 5 秒刷一条重复记录
+- `execution_syncs` 现在还会额外记录：
+  - sync 来源
+  - 请求价
+  - broker 当前观察价
+  - position ticket / position id
+  - 历史订单状态
+  - 历史成交 entry / reason
+  - 价格偏移
+  - 不利滑点点数
+  - 历史订单回读
+  - 历史成交回读
+- 当前周期对账已经能在监控里直接看到：
+  - `position_closed_tp`
+  - `position_closed_sl`
+  - `position_closed_manual`
+  - `position_closed_expert`
+- 所以现在最少已经具备：
+  - 即时下单回执
+  - 首版订单状态回传
+  - 首版持仓同步回读
+  - 首版平仓生命周期补齐

@@ -13,6 +13,9 @@ param(
     [string]$Title,
     [string]$ServeTaskName,
     [string]$RefreshTaskName,
+    [int]$AttentionSyncThreshold = 1,
+    [switch]$FailOnAttentionSync,
+    [switch]$FailOnRuntimeIssue,
     [switch]$SkipTaskRestart
 )
 
@@ -39,6 +42,9 @@ try {
         Title = $Title
         ServeTaskName = $ServeTaskName
         RefreshTaskName = $RefreshTaskName
+        AttentionSyncThreshold = $AttentionSyncThreshold
+        FailOnAttentionSync = $FailOnAttentionSync
+        FailOnRuntimeIssue = $FailOnRuntimeIssue
         SkipTaskRestart = $SkipTaskRestart
     }
 

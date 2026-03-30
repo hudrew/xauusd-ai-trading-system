@@ -35,11 +35,23 @@ class FakeMT5Module:
     ORDER_FILLING_IOC = 1
     TRADE_RETCODE_DONE = 10009
     TRADE_RETCODE_DONE_PARTIAL = 10010
+    ORDER_STATE_CANCELED = 2
+    ORDER_STATE_FILLED = 4
+    DEAL_ENTRY_IN = 0
+    DEAL_ENTRY_OUT = 1
+    DEAL_REASON_CLIENT = 0
+    DEAL_REASON_EXPERT = 3
+    DEAL_REASON_SL = 4
+    DEAL_REASON_TP = 5
 
     def __init__(self, *, retcode: int | None = None) -> None:
         self.retcode = retcode or self.TRADE_RETCODE_DONE
         self.initialized = False
         self.last_request = None
+        self.open_orders = []
+        self.open_positions = []
+        self.history_orders = []
+        self.history_deals = []
 
     def initialize(self, **kwargs):
         self.initialized = True
@@ -62,6 +74,18 @@ class FakeMT5Module:
         self.last_request = request
         response_type = namedtuple("MT5Response", ["retcode", "order"])
         return response_type(retcode=self.retcode, order=123456)
+
+    def orders_get(self, symbol=None):
+        return list(self.open_orders)
+
+    def positions_get(self, symbol=None):
+        return list(self.open_positions)
+
+    def history_orders_get(self, *args, **kwargs):
+        return list(self.history_orders)
+
+    def history_deals_get(self, *args, **kwargs):
+        return list(self.history_deals)
 
     def last_error(self):
         return (0, "OK")
@@ -149,6 +173,240 @@ class MT5ExecutionAdapterNormalizationTests(unittest.TestCase):
         self.assertEqual(order.payload["volume"], 0.12)
         self.assertEqual(fake_mt5.last_request["volume"], 0.12)
         self.assertEqual(fake_mt5.last_request["price"], 4495.67)
+
+    def test_sync_execution_state_reports_open_position_for_matching_magic(self) -> None:
+        config = SystemConfig().execution
+        config.platform = "mt5"
+        config.mt5.symbol = "XAUUSD"
+        config.mt5.magic = 2026033003
+        config.order_comment_prefix = "xauusd-ai-pbsv3"
+        fake_mt5 = FakeMT5Module()
+        position_type = namedtuple(
+            "MT5Position",
+            ["ticket", "identifier", "symbol", "magic", "comment", "volume", "price_open"],
+        )
+        fake_mt5.open_positions = [
+            position_type(
+                ticket=777001,
+                identifier=880001,
+                symbol="XAUUSD",
+                magic=2026033003,
+                comment="xauusd-ai-pbsv3:pullback",
+                volume=0.12,
+                price_open=4495.50,
+            )
+        ]
+        adapter = MT5ExecutionAdapter(config, mt5_module=fake_mt5)
+
+        signal = TradeSignal(
+            strategy_name="pullback",
+            side=TradeSide.SELL,
+            entry_type=EntryType.MARKET,
+            entry_price=4495.56,
+            stop_loss=4495.80,
+            take_profit=4495.10,
+        )
+        risk = RiskDecision(allowed=True, position_size=0.12)
+        order = adapter.build_order(signal, risk)
+        execution_result = adapter.submit_order(order)
+
+        sync_result = adapter.sync_execution_state(
+            order=order,
+            execution_result=execution_result,
+        )
+
+        self.assertEqual(sync_result.sync_status, "position_open")
+        self.assertEqual(sync_result.requested_order_id, "123456")
+        self.assertEqual(sync_result.requested_price, 4495.56)
+        self.assertEqual(sync_result.observed_price, 4495.50)
+        self.assertEqual(sync_result.observed_price_source, "position_open")
+        self.assertEqual(sync_result.position_ticket, "777001")
+        self.assertEqual(sync_result.position_identifier, "880001")
+        self.assertIsNone(sync_result.history_order_state)
+        self.assertIsNone(sync_result.history_deal_entry)
+        self.assertIsNone(sync_result.history_deal_reason)
+        self.assertEqual(sync_result.price_offset, -0.06)
+        self.assertEqual(sync_result.adverse_slippage, 0.06)
+        self.assertEqual(sync_result.adverse_slippage_points, 6.0)
+        self.assertEqual(len(sync_result.open_positions), 1)
+        self.assertEqual(sync_result.open_positions[0]["ticket"], 777001)
+        self.assertEqual(sync_result.history_orders, [])
+        self.assertEqual(sync_result.history_deals, [])
+
+    def test_sync_execution_state_reports_history_deal_when_order_is_already_historical(self) -> None:
+        config = SystemConfig().execution
+        config.platform = "mt5"
+        config.mt5.symbol = "XAUUSD"
+        config.mt5.magic = 2026033003
+        config.order_comment_prefix = "xauusd-ai-pbsv3"
+        fake_mt5 = FakeMT5Module()
+        order_type = namedtuple(
+            "MT5HistoryOrder",
+            [
+                "ticket",
+                "symbol",
+                "magic",
+                "comment",
+                "position_id",
+                "state",
+                "price_open",
+                "price_current",
+            ],
+        )
+        deal_type = namedtuple(
+            "MT5HistoryDeal",
+            [
+                "ticket",
+                "order",
+                "symbol",
+                "magic",
+                "comment",
+                "position_id",
+                "entry",
+                "reason",
+                "price",
+                "volume",
+            ],
+        )
+        fake_mt5.history_orders = [
+            order_type(
+                ticket=123456,
+                symbol="XAUUSD",
+                magic=2026033003,
+                comment="xauusd-ai-pbsv3:pullback",
+                position_id=880001,
+                state=FakeMT5Module.ORDER_STATE_FILLED,
+                price_open=4495.56,
+                price_current=4495.52,
+            )
+        ]
+        fake_mt5.history_deals = [
+            deal_type(
+                ticket=880001,
+                order=123456,
+                symbol="XAUUSD",
+                magic=2026033003,
+                comment="xauusd-ai-pbsv3:pullback",
+                position_id=880001,
+                entry=FakeMT5Module.DEAL_ENTRY_IN,
+                reason=FakeMT5Module.DEAL_REASON_EXPERT,
+                price=4495.52,
+                volume=0.12,
+            )
+        ]
+        adapter = MT5ExecutionAdapter(config, mt5_module=fake_mt5)
+
+        signal = TradeSignal(
+            strategy_name="pullback",
+            side=TradeSide.SELL,
+            entry_type=EntryType.MARKET,
+            entry_price=4495.56,
+            stop_loss=4495.80,
+            take_profit=4495.10,
+        )
+        risk = RiskDecision(allowed=True, position_size=0.12)
+        order = adapter.build_order(signal, risk)
+        execution_result = adapter.submit_order(order)
+
+        sync_result = adapter.sync_execution_state(
+            order=order,
+            execution_result=execution_result,
+        )
+
+        self.assertEqual(sync_result.sync_status, "deal_recorded")
+        self.assertEqual(sync_result.requested_order_id, "123456")
+        self.assertEqual(sync_result.observed_price, 4495.52)
+        self.assertEqual(sync_result.observed_price_source, "history_deal")
+        self.assertIsNone(sync_result.position_ticket)
+        self.assertEqual(sync_result.position_identifier, "880001")
+        self.assertEqual(sync_result.history_order_state, "order_state_filled")
+        self.assertEqual(sync_result.history_deal_ticket, "880001")
+        self.assertEqual(sync_result.history_deal_entry, "deal_entry_in")
+        self.assertEqual(sync_result.history_deal_reason, "deal_reason_expert")
+        self.assertEqual(sync_result.price_offset, -0.04)
+        self.assertEqual(sync_result.adverse_slippage_points, 4.0)
+        self.assertEqual(len(sync_result.history_orders), 1)
+        self.assertEqual(len(sync_result.history_deals), 1)
+        self.assertEqual(sync_result.history_deals[0]["ticket"], 880001)
+
+    def test_reconcile_execution_state_reports_recent_take_profit_close(self) -> None:
+        config = SystemConfig().execution
+        config.platform = "mt5"
+        config.mt5.symbol = "XAUUSD"
+        config.mt5.magic = 2026033003
+        config.mt5.reconcile_history_minutes = 180
+        config.order_comment_prefix = "xauusd-ai-pbsv3"
+        fake_mt5 = FakeMT5Module()
+        order_type = namedtuple(
+            "MT5HistoryOrder",
+            [
+                "ticket",
+                "symbol",
+                "magic",
+                "comment",
+                "position_id",
+                "state",
+                "price_open",
+                "time_done_msc",
+            ],
+        )
+        deal_type = namedtuple(
+            "MT5HistoryDeal",
+            [
+                "ticket",
+                "order",
+                "symbol",
+                "magic",
+                "comment",
+                "position_id",
+                "entry",
+                "reason",
+                "price",
+                "time_msc",
+            ],
+        )
+        fake_mt5.history_orders = [
+            order_type(
+                ticket=123456,
+                symbol="XAUUSD",
+                magic=2026033003,
+                comment="xauusd-ai-pbsv3:pullback",
+                position_id=880001,
+                state=FakeMT5Module.ORDER_STATE_FILLED,
+                price_open=4495.56,
+                time_done_msc=1711863000100,
+            )
+        ]
+        fake_mt5.history_deals = [
+            deal_type(
+                ticket=880002,
+                order=123456,
+                symbol="XAUUSD",
+                magic=2026033003,
+                comment="xauusd-ai-pbsv3:pullback",
+                position_id=880001,
+                entry=FakeMT5Module.DEAL_ENTRY_OUT,
+                reason=FakeMT5Module.DEAL_REASON_TP,
+                price=4495.10,
+                time_msc=1711863000200,
+            )
+        ]
+        adapter = MT5ExecutionAdapter(config, mt5_module=fake_mt5)
+
+        sync_result = adapter.reconcile_execution_state(symbol="XAUUSD")
+
+        self.assertEqual(sync_result.sync_origin, "reconcile")
+        self.assertEqual(sync_result.sync_status, "position_closed_tp")
+        self.assertEqual(sync_result.requested_order_id, "123456")
+        self.assertEqual(sync_result.observed_price, 4495.10)
+        self.assertEqual(sync_result.observed_price_source, "history_deal")
+        self.assertEqual(sync_result.position_identifier, "880001")
+        self.assertEqual(sync_result.history_order_state, "order_state_filled")
+        self.assertEqual(sync_result.history_deal_ticket, "880002")
+        self.assertEqual(sync_result.history_deal_entry, "deal_entry_out")
+        self.assertEqual(sync_result.history_deal_reason, "deal_reason_tp")
+        self.assertIsNone(sync_result.requested_price)
+        self.assertIsNone(sync_result.price_offset)
 
 
 if __name__ == "__main__":

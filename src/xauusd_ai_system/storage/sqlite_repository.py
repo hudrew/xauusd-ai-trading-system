@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 from ..core.models import AccountState, MarketSnapshot, TradingDecision
-from ..execution.base import ExecutionOrder, ExecutionResult
+from ..execution.base import ExecutionOrder, ExecutionResult, ExecutionSyncResult
 from .repository import AuditRepository
 
 
@@ -54,6 +55,23 @@ class SQLiteAuditRepository(AuditRepository):
                 error_message TEXT,
                 order_payload_json TEXT NOT NULL,
                 response_payload_json TEXT NOT NULL
+            )
+            """
+        )
+        self.connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS execution_syncs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                platform TEXT NOT NULL,
+                requested_order_id TEXT,
+                accepted INTEGER NOT NULL,
+                sync_status TEXT NOT NULL,
+                open_order_count INTEGER NOT NULL,
+                open_position_count INTEGER NOT NULL,
+                error_message TEXT,
+                payload_json TEXT NOT NULL
             )
             """
         )
@@ -156,6 +174,175 @@ class SQLiteAuditRepository(AuditRepository):
         )
         self.connection.commit()
 
+    def save_execution_sync(
+        self,
+        snapshot: MarketSnapshot,
+        order: ExecutionOrder | None,
+        execution_result: ExecutionResult | None,
+        sync_result: ExecutionSyncResult,
+    ) -> None:
+        self.connection.execute(
+            """
+            INSERT INTO execution_syncs (
+                timestamp,
+                symbol,
+                platform,
+                requested_order_id,
+                accepted,
+                sync_status,
+                open_order_count,
+                open_position_count,
+                error_message,
+                payload_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                snapshot.timestamp.isoformat(),
+                snapshot.symbol,
+                sync_result.platform,
+                sync_result.requested_order_id
+                or (execution_result.order_id if execution_result is not None else None),
+                int(sync_result.accepted),
+                sync_result.sync_status,
+                len(sync_result.open_orders),
+                len(sync_result.open_positions),
+                sync_result.error_message,
+                json.dumps(
+                    {
+                        "order": order.payload if order is not None else None,
+                        "execution_result": (
+                            {
+                                "accepted": execution_result.accepted,
+                                "platform": execution_result.platform,
+                                "order_id": execution_result.order_id,
+                                "raw_response": execution_result.raw_response,
+                                "error_message": execution_result.error_message,
+                            }
+                            if execution_result is not None
+                            else None
+                        ),
+                        "sync_result": {
+                            "platform": sync_result.platform,
+                            "symbol": sync_result.symbol,
+                            "requested_order_id": sync_result.requested_order_id,
+                            "accepted": sync_result.accepted,
+                            "sync_status": sync_result.sync_status,
+                            "sync_origin": sync_result.sync_origin,
+                            "requested_price": sync_result.requested_price,
+                            "observed_price": sync_result.observed_price,
+                            "observed_price_source": sync_result.observed_price_source,
+                            "position_ticket": sync_result.position_ticket,
+                            "position_identifier": sync_result.position_identifier,
+                            "history_order_state": sync_result.history_order_state,
+                            "history_deal_ticket": sync_result.history_deal_ticket,
+                            "history_deal_entry": sync_result.history_deal_entry,
+                            "history_deal_reason": sync_result.history_deal_reason,
+                            "price_offset": sync_result.price_offset,
+                            "adverse_slippage": sync_result.adverse_slippage,
+                            "adverse_slippage_points": sync_result.adverse_slippage_points,
+                            "open_orders": sync_result.open_orders,
+                            "open_positions": sync_result.open_positions,
+                            "history_orders": sync_result.history_orders,
+                            "history_deals": sync_result.history_deals,
+                            "raw_response": sync_result.raw_response,
+                            "error_message": sync_result.error_message,
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+            ),
+        )
+        self.connection.commit()
+
+    def load_latest_execution_sync_summary(
+        self,
+        *,
+        symbol: str,
+        platform: str,
+    ) -> dict[str, Any] | None:
+        row = self.connection.execute(
+            """
+            SELECT
+                requested_order_id,
+                sync_status,
+                open_order_count,
+                open_position_count,
+                error_message,
+                payload_json
+            FROM execution_syncs
+            WHERE symbol = ? AND platform = ?
+            ORDER BY timestamp DESC, id DESC
+            LIMIT 1
+            """,
+            (symbol, platform),
+        ).fetchone()
+        if row is None:
+            return None
+
+        payload = self._load_json(row["payload_json"])
+        sync_result = self._as_mapping(payload.get("sync_result"))
+        raw_response = self._as_mapping(sync_result.get("raw_response"))
+        history_orders = self._list_of_mappings(sync_result.get("history_orders"))
+        history_deals = self._list_of_mappings(sync_result.get("history_deals"))
+        return {
+            "requested_order_id": row["requested_order_id"],
+            "sync_status": row["sync_status"],
+            "sync_origin": self._coalesce(
+                sync_result.get("sync_origin"),
+                raw_response.get("sync_origin"),
+                "submission",
+            ),
+            "requested_price": self._coalesce_float(
+                sync_result.get("requested_price"),
+                raw_response.get("requested_price"),
+            ),
+            "observed_price": self._coalesce_float(
+                sync_result.get("observed_price"),
+                raw_response.get("observed_price"),
+            ),
+            "observed_price_source": self._coalesce(
+                sync_result.get("observed_price_source"),
+                raw_response.get("observed_price_source"),
+            ),
+            "position_ticket": self._coalesce(
+                sync_result.get("position_ticket"),
+                raw_response.get("position_ticket"),
+            ),
+            "position_identifier": self._coalesce(
+                sync_result.get("position_identifier"),
+                raw_response.get("position_identifier"),
+            ),
+            "history_order_state": self._coalesce(
+                sync_result.get("history_order_state"),
+                raw_response.get("history_order_state"),
+            ),
+            "history_deal_ticket": self._coalesce(
+                sync_result.get("history_deal_ticket"),
+                raw_response.get("history_deal_ticket"),
+            ),
+            "history_deal_entry": self._coalesce(
+                sync_result.get("history_deal_entry"),
+                raw_response.get("history_deal_entry"),
+            ),
+            "history_deal_reason": self._coalesce(
+                sync_result.get("history_deal_reason"),
+                raw_response.get("history_deal_reason"),
+            ),
+            "price_offset": self._coalesce_float(
+                sync_result.get("price_offset"),
+                raw_response.get("price_offset"),
+            ),
+            "adverse_slippage_points": self._coalesce_float(
+                sync_result.get("adverse_slippage_points"),
+                raw_response.get("adverse_slippage_points"),
+            ),
+            "open_order_count": int(row["open_order_count"]),
+            "open_position_count": int(row["open_position_count"]),
+            "history_order_count": len(history_orders),
+            "history_deal_count": len(history_deals),
+            "error_message": row["error_message"],
+        }
+
     def close(self) -> None:
         self.connection.close()
 
@@ -165,3 +352,51 @@ class SQLiteAuditRepository(AuditRepository):
         if not database_url.startswith(prefix):
             raise ValueError("Only sqlite URLs are supported by SQLiteAuditRepository.")
         return Path(database_url[len(prefix) :])
+
+    @staticmethod
+    def _load_json(raw: str | None) -> dict[str, Any]:
+        if not raw:
+            return {}
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        if isinstance(value, dict):
+            return value
+        return {}
+
+    @staticmethod
+    def _as_mapping(value: Any) -> dict[str, Any]:
+        if isinstance(value, dict):
+            return value
+        return {}
+
+    @staticmethod
+    def _list_of_mappings(value: Any) -> list[dict[str, Any]]:
+        if not isinstance(value, list):
+            return []
+        return [item for item in value if isinstance(item, dict)]
+
+    @staticmethod
+    def _float_or_none(value: Any) -> float | None:
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @classmethod
+    def _coalesce_float(cls, *values: Any) -> float | None:
+        for value in values:
+            parsed = cls._float_or_none(value)
+            if parsed is not None:
+                return parsed
+        return None
+
+    @staticmethod
+    def _coalesce(*values: Any) -> Any:
+        for value in values:
+            if value not in (None, ""):
+                return value
+        return None

@@ -193,6 +193,7 @@ class MT5ExecutionConfig:
     symbol: str = "XAUUSD"
     deviation: int = 30
     magic: int = 20260329
+    reconcile_history_minutes: int = 1440
 
 
 @dataclass
@@ -441,6 +442,14 @@ def _apply_environment_overrides(config: SystemConfig) -> SystemConfig:
     mt5_magic = os.getenv("XAUUSD_AI_MT5_MAGIC")
     if mt5_magic:
         config.execution.mt5.magic = int(mt5_magic)
+
+    mt5_reconcile_history_minutes = os.getenv(
+        "XAUUSD_AI_MT5_RECONCILE_HISTORY_MINUTES"
+    )
+    if mt5_reconcile_history_minutes:
+        config.execution.mt5.reconcile_history_minutes = int(
+            mt5_reconcile_history_minutes
+        )
 
     risk_max_spread_ratio = os.getenv("XAUUSD_AI_RISK_MAX_SPREAD_RATIO")
     if risk_max_spread_ratio:

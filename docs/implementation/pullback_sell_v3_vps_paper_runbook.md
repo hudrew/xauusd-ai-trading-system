@@ -8,6 +8,16 @@
 
 - `scripts/mt5_pullback_sell_v3_daily_check.ps1`
 - `scripts/mt5_pullback_sell_v3_daily_recover.ps1`
+- `scripts/mt5_pullback_sell_v3_task_recover.ps1`
+
+当前这两个短脚本也已经开始消费 `monitoring snapshot`：
+
+- `daily_check`
+  会直接打印 `latest_sync_status / latest_sync_origin / recent_attention_syncs`
+- `daily_recover`
+  恢复后会再拉一次 snapshot，并可选在 `attention sync` 或 `runtime stale` 时直接失败
+- `task_recover`
+  直接重建并拉起纸盘主任务，适合 runtime stale 但监控页本身还活着的场景
 
 ## 适用范围
 
@@ -38,8 +48,14 @@
 
 - 归档 latest：
   - `reports/research_pullback_sell_v3/acceptance/latest.json`
+- 安全 probe latest：
+  - `reports/research_pullback_sell_v3_probe/acceptance/latest.json`
 - 可传输副本：
   - `tmp/research_pullback_sell_v3_acceptance_latest.json`
+- `150000` 根样本安全 probe 导出副本：
+  - `tmp/research_pullback_sell_v3_probe_acceptance_150000_local.json`
+- `300000` 根样本安全 probe 导出副本：
+  - `tmp/research_pullback_sell_v3_probe_acceptance_300000_local.json`
 
 ## A. 在研究机执行
 
@@ -117,6 +133,57 @@ powershell -ExecutionPolicy Bypass -File .\scripts\research_pullback_sell_v3_ref
 
 - `reports/research_pullback_sell_v3_probe`
 - `tmp/research_pullback_sell_v3_probe_acceptance_latest.json`
+
+`2026-03-31` 已经完成过两轮更长样本安全复验：
+
+- 输入样本：
+  - `tmp/xauusd_m1_history_150000_chunked_vps_full.csv`
+- 输入样本：
+  - `tmp/xauusd_m1_history_300000_chunked_vps_full.csv`
+- 最新安全 probe 报告：
+  - `reports/research_pullback_sell_v3_probe/acceptance/latest.json`
+- `150000` 根样本关键结果：
+  - `ready = true`
+  - `passed_checks = 10/10`
+  - `total_net_pnl = 1.39`
+  - `profit_factor = 2.4762`
+  - `out_of_sample_net_pnl = 1.09`
+  - `walk_forward_positive_window_rate = 0.9931`
+  - `session_profit_concentration = 1.0`
+- `300000` 根样本关键结果：
+  - `ready = true`
+  - `passed_checks = 10/10`
+  - `total_net_pnl = 1.39`
+  - `profit_factor = 2.4762`
+  - `out_of_sample_net_pnl = 1.00`
+  - `out_of_sample_profit_factor = 1.7565`
+  - `walk_forward_positive_window_rate = 0.9966`
+  - `session_profit_concentration = 1.0`
+- 目前可以先把这个候选线理解成：
+  - 更长样本没有直接把它打穿
+  - 但交易仍然非常少
+  - 收益仍然集中在 `us` 时段
+
+这一轮也顺手确认了一个非常重要的部署边界：
+
+- 当前 Windows VPS 规格只有：
+  - `1` 个物理核心
+  - `2` 个逻辑处理器
+  - 约 `4.29 GB` 内存
+- 长 `acceptance / walk-forward` 跑在这台 VPS 上时：
+  - 可用内存一度只剩约 `244 MB`
+  - Python 回测进程工作集约 `1.59 GB`
+  - 速度明显过慢，而且会和纸盘任务争资源
+- 所以后续原则固定为：
+  - Windows VPS 只做 `MT5 执行 / 纸盘 / 监控 / 短检查`
+  - 长研究统一放到本地研究机或独立研究宿主机
+
+如果只是想把 VPS 上导出的长历史带回研究机，不要优先直接拉大 CSV，优先：
+
+- 先在 VPS 上压缩成 `zip`
+- 再传回本地解压
+
+这样比直接拉原始 CSV 更稳，也更不容易中途中断。
 
 ### 2. 导出一份可传输 JSON
 

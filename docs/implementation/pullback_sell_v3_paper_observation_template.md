@@ -92,6 +92,46 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_re
 
 - `正常 / 偏多 / 异常`
 
+`Paper Window` 观察：
+
+- 窗口权益变化：
+- 最新日内收益：
+- 最大回撤：
+- 平均/最大点差：
+
+`Risk Block Reasons` 观察：
+
+- 主要拦截原因：
+- 是否出现某一类原因突然暴增：
+
+`Execution Outcome Mix / Execution Error Pressure` 观察：
+
+- accepted / rejected 比例：
+- 主要执行失败原因：
+
+`Execution Sync Status / Recent Execution Syncs` 观察：
+
+- 最新 sync 状态：
+- 最新 sync origin：
+- 最近 submission / reconcile 数量：
+- 最新 requested / observed price：
+- 最新 observed source：
+- latest position ticket / id：
+- latest history order state：
+- latest history deal entry / reason：
+- 最新 price offset：
+- 最新 adverse slippage points：
+- average / max adverse slippage points：
+- latest history orders / deals：
+- latest history deal ticket：
+- 当前 open orders 数量：
+- 当前 open positions 数量：
+- 最近 close events 数量：
+- 最近 tp / sl / manual / expert 数量：
+- 最近 attention sync 数量：
+- 是否出现 `accepted_not_visible / accepted_unmatched`：
+- 是否出现 `position_closed_tp / position_closed_sl / position_closed_manual / position_closed_expert`：
+
 日志是否出现失败关键词：
 
 - `无 / 有`

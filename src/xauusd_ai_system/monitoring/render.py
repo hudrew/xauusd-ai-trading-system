@@ -15,10 +15,14 @@ def render_monitoring_dashboard(
     runtime = snapshot["runtime"]
     overview = snapshot["overview"]
     mix = snapshot["mix"]
+    paper = snapshot["paper"]
+    pressure = snapshot["pressure"]
+    execution_sync = snapshot["execution_sync"]
     latest_decision = snapshot["latest_decision"]
     recent_alerts = snapshot["recent_alerts"]
     recent_decisions = snapshot["recent_decisions"]
     recent_executions = snapshot["recent_executions"]
+    recent_execution_syncs = snapshot["recent_execution_syncs"]
 
     title_text = html.escape(title)
     runtime_status = str(runtime["status"]).upper()
@@ -335,11 +339,38 @@ def render_monitoring_dashboard(
         {_metric_card("最新价格", latest_close, f"state {latest_state}")}
         {_metric_card("波动等级", latest_volatility, f"刷新 {html.escape(generated_at)}")}
         {_metric_card("风险拦截率", _percent(overview["risk_block_rate"]), f"{overview['risk_blocked']} / {overview['decision_window_size']}")}
-        {_metric_card("执行尝试", str(overview["execution_window_size"]), f"accepted {overview['accepted_executions']}")}
+        {_metric_card("执行接受率", _percent(paper["execution_accept_rate"]), f"{overview['accepted_executions']} / {overview['execution_window_size']}")}
+        {_metric_card("窗口权益变化", _signed_currency_text(paper["equity_change"]), f"equity { _float_text(paper['latest_equity']) }")}
+        {_metric_card("候选信号", str(paper["candidate_signals"]), f"allowed {paper['allowed_candidates']}")}
+        {_metric_card("执行同步", str(execution_sync["latest_status"] or "--"), f"{execution_sync['latest_origin'] or '--'} · attn {execution_sync['recent_attention_count']}")}
+        {_metric_card("最新不利滑点", _points_text(execution_sync["latest_adverse_slippage_points"]), f"avg {_points_text(execution_sync['average_adverse_slippage_points'])} / max {_points_text(execution_sync['max_adverse_slippage_points'])}")}
       </div>
     </section>
 
     <section class="grid">
+      <div class="panel span-4">
+        <h2>Paper Window</h2>
+        <table>
+          <tbody>
+            <tr><td data-label="Field">Window Start</td><td data-label="Value" class="mono">{html.escape(_format_timestamp(paper["window_start"]))}</td></tr>
+            <tr><td data-label="Field">Window End</td><td data-label="Value" class="mono">{html.escape(_format_timestamp(paper["window_end"]))}</td></tr>
+            <tr><td data-label="Field">Window Span</td><td data-label="Value">{html.escape(_minutes_text(paper["window_span_minutes"]))}</td></tr>
+            <tr><td data-label="Field">Latest Daily PnL</td><td data-label="Value">{html.escape(_signed_percent(paper["latest_daily_pnl_pct"]))}</td></tr>
+            <tr><td data-label="Field">Max Drawdown</td><td data-label="Value">{html.escape(_percent(paper["max_drawdown_pct"]))}</td></tr>
+            <tr><td data-label="Field">Spread Avg / Max</td><td data-label="Value">{html.escape(f'{_float_text(paper["average_spread"])} / {_float_text(paper["max_spread"])}')}</td></tr>
+            <tr><td data-label="Field">Open Positions</td><td data-label="Value">{paper["latest_open_positions"]} latest / {paper["max_open_positions"]} max</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel span-4">
+        <h2>Risk Block Reasons</h2>
+        {_render_mix(pressure["risk_reasons"])}
+      </div>
+      <div class="panel span-4">
+        <h2>Risk Advisories</h2>
+        {_render_mix(pressure["risk_advisories"])}
+      </div>
+
       <div class="panel span-4">
         <h2>State Mix</h2>
         {_render_mix(mix["state_labels"])}
@@ -351,6 +382,56 @@ def render_monitoring_dashboard(
       <div class="panel span-4">
         <h2>Session Mix</h2>
         {_render_mix(mix["sessions"])}
+      </div>
+
+      <div class="panel span-6">
+        <h2>Execution Outcome Mix</h2>
+        {_render_mix(pressure["execution_statuses"])}
+      </div>
+      <div class="panel span-6">
+        <h2>Execution Error Pressure</h2>
+        {_render_mix(pressure["execution_errors"])}
+      </div>
+      <div class="panel span-6">
+        <h2>Execution Sync Status</h2>
+        {_render_mix(pressure["execution_sync_statuses"])}
+      </div>
+      <div class="panel span-6">
+        <h2>Execution Sync Origin</h2>
+        {_render_mix(pressure["execution_sync_origins"])}
+      </div>
+      <div class="panel span-6">
+        <h2>Broker Close Status</h2>
+        {_render_mix(pressure["execution_sync_close_statuses"])}
+      </div>
+      <div class="panel span-6">
+        <h2>Broker Deal Reason</h2>
+        {_render_mix(pressure["execution_sync_deal_reasons"])}
+      </div>
+      <div class="panel span-6">
+        <h2>Execution Price Drift</h2>
+        <table>
+          <tbody>
+            <tr><td data-label="Field">Latest Requested Price</td><td data-label="Value">{html.escape(_float_text(execution_sync["latest_requested_price"]))}</td></tr>
+            <tr><td data-label="Field">Latest Observed Price</td><td data-label="Value">{html.escape(_float_text(execution_sync["latest_observed_price"]))}</td></tr>
+            <tr><td data-label="Field">Observed Source</td><td data-label="Value">{html.escape(str(execution_sync["latest_observed_price_source"] or "--"))}</td></tr>
+            <tr><td data-label="Field">Latest Sync Origin</td><td data-label="Value">{html.escape(str(execution_sync["latest_origin"] or "--"))}</td></tr>
+            <tr><td data-label="Field">Position Ticket / ID</td><td data-label="Value" class="mono">{html.escape(f'{execution_sync["latest_position_ticket"] or "--"} / {execution_sync["latest_position_identifier"] or "--"}')}</td></tr>
+            <tr><td data-label="Field">Latest Deal Ticket</td><td data-label="Value" class="mono">{html.escape(str(execution_sync["latest_history_deal_ticket"] or "--"))}</td></tr>
+            <tr><td data-label="Field">History Orders / Deals</td><td data-label="Value">{execution_sync["latest_history_order_count"]} / {execution_sync["latest_history_deal_count"]}</td></tr>
+            <tr><td data-label="Field">History Order State</td><td data-label="Value">{html.escape(str(execution_sync["latest_history_order_state"] or "--"))}</td></tr>
+            <tr><td data-label="Field">History Deal Entry / Reason</td><td data-label="Value">{html.escape(f'{execution_sync["latest_history_deal_entry"] or "--"} / {execution_sync["latest_history_deal_reason"] or "--"}')}</td></tr>
+            <tr><td data-label="Field">Latest Price Offset</td><td data-label="Value">{html.escape(_signed_float_text(execution_sync["latest_price_offset"], digits=4))}</td></tr>
+            <tr><td data-label="Field">Latest Adverse Slippage</td><td data-label="Value">{html.escape(_points_text(execution_sync["latest_adverse_slippage_points"]))}</td></tr>
+            <tr><td data-label="Field">Average Adverse Slippage</td><td data-label="Value">{html.escape(_points_text(execution_sync["average_adverse_slippage_points"]))}</td></tr>
+            <tr><td data-label="Field">Max Adverse Slippage</td><td data-label="Value">{html.escape(_points_text(execution_sync["max_adverse_slippage_points"]))}</td></tr>
+            <tr><td data-label="Field">Tracked Sync Count</td><td data-label="Value">{execution_sync["tracked_sync_count"]}</td></tr>
+            <tr><td data-label="Field">Recent Submission / Reconcile</td><td data-label="Value">{execution_sync["recent_submission_count"]} / {execution_sync["recent_reconcile_count"]}</td></tr>
+            <tr><td data-label="Field">Recent Close Events</td><td data-label="Value">{execution_sync["recent_close_event_count"]}</td></tr>
+            <tr><td data-label="Field">TP / SL / Manual / Expert</td><td data-label="Value">{execution_sync["recent_tp_close_count"]} / {execution_sync["recent_sl_close_count"]} / {execution_sync["recent_manual_close_count"]} / {execution_sync["recent_expert_close_count"]}</td></tr>
+            <tr><td data-label="Field">Recent Attention Syncs</td><td data-label="Value">{execution_sync["recent_attention_count"]}</td></tr>
+          </tbody>
+        </table>
       </div>
 
       <div class="panel span-12">
@@ -370,6 +451,11 @@ def render_monitoring_dashboard(
       <div class="panel span-12">
         <h2>Recent Execution Attempts</h2>
         {_render_execution_table(recent_executions[:14])}
+      </div>
+
+      <div class="panel span-12">
+        <h2>Recent Execution Syncs</h2>
+        {_render_execution_sync_table(recent_execution_syncs[:14])}
       </div>
 
       <div class="panel span-12">
@@ -519,6 +605,61 @@ def _render_execution_table(rows: list[dict[str, Any]]) -> str:
     )
 
 
+def _render_execution_sync_table(rows: list[dict[str, Any]]) -> str:
+    if not rows:
+        return '<div class="empty">最近窗口内还没有执行同步记录。</div>'
+
+    body = []
+    for row in rows:
+        status = str(row["sync_status"] or "--")
+        body.append(
+            f"""
+            <tr>
+              <td data-label="Time" class="mono">{html.escape(_format_timestamp(row["timestamp"]))}</td>
+              <td data-label="Platform">{html.escape(str(row["platform"]))}</td>
+              <td data-label="Origin">{html.escape(str(row["sync_origin"] or "--"))}</td>
+              <td data-label="Status"><span class="pill {_execution_sync_status_class(status)}">{html.escape(status)}</span></td>
+              <td data-label="Order">{html.escape(str(row["requested_order_id"] or "--"))}</td>
+              <td data-label="Hist Orders">{row["history_order_count"]}</td>
+              <td data-label="Hist Deals">{row["history_deal_count"]}</td>
+              <td data-label="Pos ID">{html.escape(str(row["position_identifier"] or row["position_ticket"] or "--"))}</td>
+              <td data-label="Deal Entry">{html.escape(str(row["history_deal_entry"] or "--"))}</td>
+              <td data-label="Requested">{html.escape(_float_text(row["requested_price"]))}</td>
+              <td data-label="Observed">{html.escape(_float_text(row["observed_price"]))}</td>
+              <td data-label="Source">{html.escape(str(row["observed_price_source"] or "--"))}</td>
+              <td data-label="Offset">{html.escape(_signed_float_text(row["price_offset"], digits=4))}</td>
+              <td data-label="Adverse Pts">{html.escape(_points_text(row["adverse_slippage_points"]))}</td>
+              <td data-label="Open Orders">{row["open_order_count"]}</td>
+              <td data-label="Open Positions">{row["open_position_count"]}</td>
+              <td data-label="Error">{html.escape(str(row["error_message"] or "--"))}</td>
+            </tr>
+            """
+        )
+    return (
+        "<table><thead><tr>"
+        "<th>Time</th><th>Platform</th><th>Origin</th><th>Status</th><th>Order</th><th>Hist Ord</th><th>Hist Deal</th><th>Pos ID</th><th>Deal Entry</th><th>Requested</th><th>Observed</th><th>Source</th><th>Offset</th><th>Adverse Pts</th><th>Open Orders</th><th>Open Positions</th><th>Error</th>"
+        "</tr></thead><tbody>"
+        + "".join(body)
+        + "</tbody></table>"
+    )
+
+
+def _execution_sync_status_class(status: str) -> str:
+    if status in {"position_open", "order_open", "deal_recorded", "position_closed_tp"}:
+        return "allowed"
+    if status in {
+        "history_order_recorded",
+        "no_tracked_activity",
+        "position_closed",
+        "position_closed_expert",
+        "position_closed_manual",
+        "position_closed_sl",
+        "order_canceled",
+    } or status.startswith("accepted"):
+        return "warning"
+    return "blocked"
+
+
 def _status_class(value: str) -> str:
     if value in {"healthy", "stale", "inactive", "missing"}:
         return value
@@ -549,6 +690,33 @@ def _float_text(value: Any) -> str:
         return "--"
 
 
+def _signed_float_text(value: Any, *, digits: int = 2) -> str:
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return "--"
+    sign = "+" if amount > 0 else ""
+    return f"{sign}{amount:.{digits}f}"
+
+
+def _signed_currency_text(value: Any) -> str:
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return "--"
+    sign = "+" if amount > 0 else ""
+    return f"{sign}{amount:.2f}"
+
+
+def _signed_percent(value: Any) -> str:
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return "--"
+    sign = "+" if amount > 0 else ""
+    return f"{sign}{amount * 100:.2f}%"
+
+
 def _staleness_text(value: Any) -> str:
     if value is None:
         return "--"
@@ -560,6 +728,24 @@ def _staleness_text(value: Any) -> str:
         return f"{seconds}s"
     minutes, remain = divmod(seconds, 60)
     return f"{minutes}m {remain}s"
+
+
+def _minutes_text(value: Any) -> str:
+    try:
+        minutes = float(value)
+    except (TypeError, ValueError):
+        return "--"
+    if minutes < 60:
+        return f"{minutes:.1f}m"
+    hours = minutes / 60.0
+    return f"{hours:.1f}h"
+
+
+def _points_text(value: Any) -> str:
+    try:
+        return f"{float(value):.2f} pts"
+    except (TypeError, ValueError):
+        return "--"
 
 
 def serialize_monitoring_snapshot(snapshot: dict[str, Any]) -> str:

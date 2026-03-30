@@ -185,6 +185,24 @@ flowchart LR
 
 - `MT5` 已经具备首版可接入能力
 - `cTrader` 已统一到接口层，但还需要补完异步会话与历史 bar 拉取
+- `MT5` 现在还新增了首版执行同步：
+  - 下单后会回读 `open orders / open positions`
+  - 后续每轮 live loop 还会继续做 broker reconcile
+  - 同步结果会落到 `execution_syncs`
+  - 同步记录里会补充：
+    - `sync_origin`
+    - `requested_price / observed_price`
+    - `position ticket / position id`
+    - `history order state`
+    - `history deal entry / reason`
+    - `price_offset`
+    - `adverse_slippage_points`
+    - `history_orders / history_deals`
+  - 当前周期对账已经能直接补：
+    - `position_open / order_open`
+    - `position_closed_tp / position_closed_sl`
+    - `position_closed_manual / position_closed_expert`
+  - 同步记录现在只在状态变化时落库，避免监控统计被轮询噪声冲歪
 
 ### 8. 复盘与报表
 

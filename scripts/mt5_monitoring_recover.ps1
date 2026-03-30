@@ -15,6 +15,9 @@ param(
     [string]$Title,
     [string]$ServeTaskName,
     [string]$RefreshTaskName,
+    [int]$AttentionSyncThreshold = 1,
+    [switch]$FailOnAttentionSync,
+    [switch]$FailOnRuntimeIssue,
     [switch]$SkipTaskRestart
 )
 
@@ -64,6 +67,18 @@ function Stop-PortListeners {
             Write-Host ("port_process_stop_warning: {0} -> {1}" -f $processId, $_.Exception.Message)
         }
     }
+}
+
+function Get-FirstMixName {
+    param(
+        [object[]]$Rows
+    )
+
+    if ($null -eq $Rows -or $Rows.Count -eq 0) {
+        return $null
+    }
+
+    return [string]$Rows[0].name
 }
 
 Ensure-Venv
@@ -169,4 +184,49 @@ finally {
     else {
         $env:XAUUSD_AI_ENV = $previousEnvMode
     }
+}
+
+Write-Host ""
+Write-Host "[monitoring-snapshot]" -ForegroundColor Cyan
+
+$snapshot = Get-Mt5MonitoringSnapshot `
+    -ConfigPath $resolvedConfigPath `
+    -DecisionLimit $DecisionLimit `
+    -ExecutionLimit $ExecutionLimit `
+    -StaleAfterSeconds $StaleAfterSeconds
+
+Write-Host ("runtime_status: {0}" -f $snapshot.runtime.status)
+Write-Host ("latest_sync_status: {0}" -f $snapshot.execution_sync.latest_status)
+Write-Host ("latest_sync_origin: {0}" -f $snapshot.execution_sync.latest_origin)
+Write-Host ("latest_sync_attention: {0}" -f $snapshot.execution_sync.latest_is_attention)
+Write-Host ("recent_attention_syncs: {0}" -f $snapshot.execution_sync.recent_attention_count)
+Write-Host ("recent_close_events: {0}" -f $snapshot.execution_sync.recent_close_event_count)
+Write-Host ("top_close_status: {0}" -f (Get-FirstMixName -Rows $snapshot.pressure.execution_sync_close_statuses))
+Write-Host ("top_deal_reason: {0}" -f (Get-FirstMixName -Rows $snapshot.pressure.execution_sync_deal_reasons))
+
+$hasRuntimeIssue = $snapshot.runtime.status -ne "healthy"
+$hasAttentionSync = (
+    [bool]$snapshot.execution_sync.latest_is_attention -or
+    [int]$snapshot.execution_sync.recent_attention_count -ge [Math]::Max($AttentionSyncThreshold, 1)
+)
+
+if ($hasRuntimeIssue) {
+    Write-Host "runtime_issue_detected" -ForegroundColor Yellow
+}
+
+if ($hasAttentionSync) {
+    Write-Host "attention_sync_detected" -ForegroundColor Yellow
+}
+
+if ($FailOnRuntimeIssue -and $hasRuntimeIssue) {
+    throw ("Monitoring runtime is not healthy: {0}" -f $snapshot.runtime.status)
+}
+
+if ($FailOnAttentionSync -and $hasAttentionSync) {
+    throw (
+        "Execution sync attention threshold reached: latest_is_attention={0}, recent_attention_syncs={1}, threshold={2}" -f
+        $snapshot.execution_sync.latest_is_attention,
+        $snapshot.execution_sync.recent_attention_count,
+        [Math]::Max($AttentionSyncThreshold, 1)
+    )
 }

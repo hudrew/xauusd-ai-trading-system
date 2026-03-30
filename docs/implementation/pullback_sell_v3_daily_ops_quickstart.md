@@ -9,6 +9,20 @@
 - `pullback v3`
 - `MT5 Windows VPS`
 
+这份速查手册只用于：
+
+- 日常值守
+- 页面恢复
+- 任务状态检查
+
+不用于：
+
+- 长 `acceptance`
+- 长 `walk-forward`
+- 大样本研究回测
+
+这类长研究任务统一放到本地研究机或独立研究宿主机，不要压当前这台 `1 核 / 4GB` 的 Windows VPS。
+
 对应配置：
 
 - `configs/mt5_paper_pullback_sell_v3.yaml`
@@ -40,6 +54,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_recover.ps1 .env.mt5.local
 ```
 
+如果你希望恢复后顺手把异常 sync 当成失败直接抛出，也可以加：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_recover.ps1 .env.mt5.local -FailOnAttentionSync -FailOnRuntimeIssue
+```
+
+如果你希望在 runtime 不健康时顺手把纸盘主任务也重新拉起，可以加：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_recover.ps1 .env.mt5.local -RecoverPaperTaskOnRuntimeIssue
+```
+
 ## 你每天最常用的 4 件事
 
 ### 1. 打开监控页
@@ -54,6 +80,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_re
 - 最近高波动预警有没有异常暴增
 - 最近执行尝试是不是持续刷新
 - 页面有没有明显 stale 提示
+- `Paper Window` 里的权益变化、日内收益、最大回撤有没有异常
+- `Risk Block Reasons` 和 `Execution Error Pressure` 有没有突然集中到某一类原因
+- `Execution Price Drift` 里的最新不利滑点、均值、最大值有没有突然抬升
+- `Recent Execution Syncs` 里有没有连续出现 `accepted_not_visible / accepted_unmatched`
 
 ### 2. 看系统是否还在跑
 
@@ -84,6 +114,32 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 - `dashboard_updated_at` 有没有持续更新
 - `health_status_code` 对应页面能否返回 `200`
 
+如果页面正常刷新，现在优先看的新增面板是：
+
+- `Paper Window`
+  - 看窗口开始/结束时间
+  - 看最近权益变化
+  - 看最新日内收益和最大回撤
+  - 看平均点差和最大点差
+- `Risk Block Reasons`
+  - 看是不是被 `SESSION_NOT_ALLOWED`
+  - 看是不是被 `STRATEGY_DISABLED`
+  - 看是不是被波动或风控原因大量拦截
+- `Execution Outcome Mix`
+  - 看 accepted / rejected 比例有没有突然恶化
+- `Execution Error Pressure`
+  - 看错误是不是集中在同一种执行失败原因
+- `Execution Price Drift`
+  - 看最新请求价和观察价差多少
+  - 看 `Position Ticket / ID`
+  - 看 `History Order State`
+  - 看 `History Deal Entry / Reason`
+  - 看 `Latest Price Offset`
+  - 看 `Average / Max Adverse Slippage`
+- `Recent Execution Syncs`
+  - 看 `Hist Ord / Hist Deal` 是否开始稳定出现
+  - 如果 open positions 看不到，但 history deal 已出现，优先按“broker 已记成交”处理
+
 ### 4. 页面打不开时直接恢复
 
 ```powershell
@@ -97,6 +153,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_re
 - 重建监控计划任务
 - 重启只读监控页面
 - 重新检查 `/health`
+- 最后再拉一次 `monitoring snapshot`
+- 可选按 `attention sync / runtime status` 直接返回失败
 
 ## 最省事的标准操作顺序
 
@@ -146,6 +204,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_re
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_task_status.ps1 .env.mt5.local -TailLog
 ```
 
+恢复主任务：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_task_recover.ps1 .env.mt5.local -TailLog
+```
+
 检查监控任务：
 
 ```powershell
@@ -156,6 +220,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitori
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_recover.ps1 .env.mt5.local
+```
+
+严格模式恢复：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_recover.ps1 .env.mt5.local -FailOnAttentionSync -FailOnRuntimeIssue
 ```
 
 重建监控自启任务：
@@ -235,6 +305,29 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_register
 日常巡检归档默认会写到：
 
 - `var\xauusd_ai\ops_checks\paper\mt5-paper-pullback-sell-v3\`
+
+监控页里看执行同步时，当前优先关注：
+
+- `Latest Sync Origin`
+  是否已经从 `submission` 平滑切到后续 `reconcile`
+- `Execution Sync Status`
+  是否出现 `position_closed_tp / position_closed_sl / position_closed_manual`
+- `Execution Sync Origin`
+  最近窗口里是否同时还能看到 `submission / reconcile`
+- `Broker Close Status`
+  最近平仓是否主要来自 `tp / sl / manual / expert`
+- `Broker Deal Reason`
+  broker 返回的成交原因是否和状态判断一致
+- `Recent Execution Syncs`
+  是否长时间只重复同一条异常状态
+
+当前 `daily_check` 也会额外打印一段 `monitoring-snapshot`，直接给出：
+
+- `latest_sync_status / latest_sync_origin`
+- `recent_submission_syncs / recent_reconcile_syncs`
+- `recent_tp_close_events / recent_sl_close_events`
+- `recent_manual_close_events / recent_expert_close_events`
+- `recent_attention_syncs`
 
 ## 什么时候看完整文档
 
