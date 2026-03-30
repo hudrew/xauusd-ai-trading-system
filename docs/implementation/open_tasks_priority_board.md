@@ -23,10 +23,11 @@
 - 监控与值守入口已打通
 - 研究验收链已打通
 - `150000` 和 `300000` 根 `M1` 的安全 probe 验收都已在本地研究机通过
+- `500000` 根 `M1` 的安全 probe 验收也已在本地研究机通过
 - 当前不再是“最新研究门禁没过”
 - 现在真正要继续收口的是：
   - 纸盘连续运行稳定性
-  - 更长样本下的稳健性
+  - 更长样本下的稳健性与成交覆盖率
   - 生产执行闭环
 
 ## 本周必须做
@@ -94,7 +95,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 
 - 现在系统链路已经通了
 - 当前 branch gate 最新报告已经是 `ready = true`
-- 当前 `probe` 报告目录里的 `150000` 和 `300000` 根 `M1` 本地复验都已经是 `ready = true`
+- 当前 `probe` 报告目录里的 `150000`、`300000` 和 `500000` 根 `M1` 本地复验都已经是 `ready = true`
 - 但“更长样本是否还能站住”还没有验证完
 - 不先复验更长样本，不能进入正式生产决策
 
@@ -149,12 +150,22 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
   - `out_of_sample_profit_factor = 1.7565`
   - `walk_forward_positive_window_rate = 0.9966`
   - `session_profit_concentration = 1.0`
+- 随后继续完成了 `500000` 根 `M1` 的本地安全 probe 验收，结果仍然通过：
+  - `ready = true`
+  - `passed_checks = 10/10`
+  - `total_net_pnl = 1.42`
+  - `profit_factor = 2.5152`
+  - `out_of_sample_net_pnl = 1.42`
+  - `out_of_sample_profit_factor = 2.5152`
+  - `walk_forward_positive_window_rate = 0.9980`
+  - `session_profit_concentration = 1.0`
 - 这说明当前门禁没有被更长样本直接打掉
 - 但也说明另一个问题：
   - 从 `150000` 扩到 `300000` 后，实际成交仍只有 `7` 笔
+  - 从 `300000` 扩到 `500000` 后，实际成交仍然还是 `7` 笔
   - 总收益没有继续放大
   - 收益仍全部来自 `us`
-- 当前需要继续看的，不再是“能不能导出更长历史”，而是“更长样本验收结果是否还能站住”
+- 当前需要继续看的，不再只是“能不能导出更长历史”，而是“为什么成交覆盖率没有随着样本一起增长”
 - 复验时优先走 `probe` 报告目录，避免覆盖当前纸盘正在使用的正式 latest
 - 当前这台 VPS 不适合长研究任务：
   - `1` 个物理核心
@@ -185,8 +196,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 - 正收益仍主要集中在 `us`
 - 最新 `150000` 样本里实际成交仍全部来自 `us`
 - 最新 `300000` 样本里实际成交仍全部来自 `us`
-- 从 `150000` 扩到 `300000` 后，成交笔数仍然只有 `7`
+- 最新 `500000` 样本里实际成交仍全部来自 `us`
+- 从 `150000` 扩到 `500000` 后，成交笔数仍然只有 `7`
 - `session_profit_concentration = 1.0` 只是压线通过，不代表时段分散已经足够好
+- 当前更真实的研究问题已经从“会不会被更长样本打穿”转成了“交易频次为什么仍然这么低”
 
 完成标准：
 
@@ -196,6 +209,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
   - 是否继续限制 `asia`
   - 是否增加“位置过偏 + 波动过高”的统一过滤
   - 是否继续加严 `pullback` 触发条件
+  - 是否需要补一轮 `pullback` 覆盖率 / 信号密度审计
 
 ## 下周再做
 

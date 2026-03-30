@@ -134,12 +134,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\research_pullback_sell_v3_ref
 - `reports/research_pullback_sell_v3_probe`
 - `tmp/research_pullback_sell_v3_probe_acceptance_latest.json`
 
-`2026-03-31` 已经完成过两轮更长样本安全复验：
+`2026-03-31` 已经完成过三轮更长样本安全复验：
 
 - 输入样本：
   - `tmp/xauusd_m1_history_150000_chunked_vps_full.csv`
 - 输入样本：
   - `tmp/xauusd_m1_history_300000_chunked_vps_full.csv`
+- 输入样本：
+  - `tmp/xauusd_m1_history_500000.csv`
 - 最新安全 probe 报告：
   - `reports/research_pullback_sell_v3_probe/acceptance/latest.json`
 - `150000` 根样本关键结果：
@@ -159,10 +161,26 @@ powershell -ExecutionPolicy Bypass -File .\scripts\research_pullback_sell_v3_ref
   - `out_of_sample_profit_factor = 1.7565`
   - `walk_forward_positive_window_rate = 0.9966`
   - `session_profit_concentration = 1.0`
+- `500000` 根样本关键结果：
+  - `ready = true`
+  - `passed_checks = 10/10`
+  - `total_net_pnl = 1.42`
+  - `profit_factor = 2.5152`
+  - `out_of_sample_net_pnl = 1.42`
+  - `out_of_sample_profit_factor = 2.5152`
+  - `walk_forward_positive_window_rate = 0.9980`
+  - `session_profit_concentration = 1.0`
 - 目前可以先把这个候选线理解成：
   - 更长样本没有直接把它打穿
   - 但交易仍然非常少
   - 收益仍然集中在 `us` 时段
+  - 从 `150000` 扩到 `500000` 后，实际成交仍然只有 `7` 笔
+
+这说明当前下一步重点不再只是“继续拉更长历史”，而是：
+
+- 解释为什么当前成交覆盖率一直没有明显增加
+- 判断这条候选线是应该保持低频高筛选
+- 还是需要适度放松 `pullback` 的触发密度
 
 这一轮也顺手确认了一个非常重要的部署边界：
 
