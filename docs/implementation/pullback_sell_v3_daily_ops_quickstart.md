@@ -28,6 +28,12 @@
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check.ps1 .env.mt5.local
 ```
 
+归档巡检结果：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_archive.ps1 .env.mt5.local
+```
+
 页面异常时恢复：
 
 ```powershell
@@ -120,6 +126,12 @@ git pull
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check.ps1 .env.mt5.local
+```
+
+一键巡检并归档结果：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_archive.ps1 .env.mt5.local
 ```
 
 一键监控恢复：
@@ -220,6 +232,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_register
 
 - `-Port 80`
 
+日常巡检归档默认会写到：
+
+- `var\xauusd_ai\ops_checks\paper\mt5-paper-pullback-sell-v3\`
+
 ## 什么时候看完整文档
 
 如果你遇到下面这些情况，再去看完整 runbook：
@@ -232,3 +248,4 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_register
 完整文档：
 
 - `docs/implementation/pullback_sell_v3_vps_paper_runbook.md`
+- `docs/implementation/pullback_sell_v3_paper_observation_template.md`

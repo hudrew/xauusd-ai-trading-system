@@ -194,6 +194,7 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
     def test_monitoring_autostart_scripts_exist(self) -> None:
         relative_paths = (
             "scripts/mt5_pullback_sell_v3_daily_check.ps1",
+            "scripts/mt5_pullback_sell_v3_daily_check_archive.ps1",
             "scripts/mt5_pullback_sell_v3_daily_recover.ps1",
             "scripts/mt5_monitoring_export_loop.ps1",
             "scripts/mt5_monitoring_recover.ps1",
@@ -216,6 +217,7 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         wrapper_register_content = (ROOT / "scripts/mt5_pullback_sell_v3_monitoring_register_tasks.ps1").read_text(encoding="utf-8")
         wrapper_recover_content = (ROOT / "scripts/mt5_pullback_sell_v3_monitoring_recover.ps1").read_text(encoding="utf-8")
         daily_check_content = (ROOT / "scripts/mt5_pullback_sell_v3_daily_check.ps1").read_text(encoding="utf-8")
+        daily_check_archive_content = (ROOT / "scripts/mt5_pullback_sell_v3_daily_check_archive.ps1").read_text(encoding="utf-8")
         daily_recover_content = (ROOT / "scripts/mt5_pullback_sell_v3_daily_recover.ps1").read_text(encoding="utf-8")
 
         self.assertIn("Register-ScheduledTask", register_content)
@@ -239,6 +241,10 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn("mt5_pullback_sell_v3_monitoring_task_status.ps1", daily_check_content)
         self.assertIn("Invoke-WebRequest", daily_check_content)
         self.assertIn("[int]$Port = 80", daily_check_content)
+        self.assertIn('var\\xauusd_ai\\ops_checks\\paper', daily_check_archive_content)
+        self.assertIn("Start-Transcript", daily_check_archive_content)
+        self.assertIn("mt5_pullback_sell_v3_daily_check.ps1", daily_check_archive_content)
+        self.assertIn("[int]$Port = 80", daily_check_archive_content)
         self.assertIn("mt5_pullback_sell_v3_monitoring_recover.ps1", daily_recover_content)
         self.assertIn("mt5_pullback_sell_v3_daily_check.ps1", daily_recover_content)
         self.assertIn("[int]$Port = 80", daily_recover_content)

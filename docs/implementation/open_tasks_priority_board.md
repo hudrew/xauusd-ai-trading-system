@@ -54,6 +54,12 @@
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check.ps1 .env.mt5.local
 ```
 
+建议同时归档：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_archive.ps1 .env.mt5.local
+```
+
 ### 2. 再导更长的 MT5 历史并复跑研究验收
 
 目标：
