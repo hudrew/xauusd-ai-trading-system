@@ -16,7 +16,8 @@ param(
     [int]$AttentionSyncThreshold = 1,
     [switch]$FailOnAttentionSync,
     [switch]$FailOnRuntimeIssue,
-    [switch]$SkipTaskRestart
+    [switch]$SkipTaskRestart,
+    [switch]$SkipProcessCleanup
 )
 
 Set-StrictMode -Version Latest
@@ -46,6 +47,7 @@ try {
         FailOnAttentionSync = $FailOnAttentionSync
         FailOnRuntimeIssue = $FailOnRuntimeIssue
         SkipTaskRestart = $SkipTaskRestart
+        SkipProcessCleanup = $SkipProcessCleanup
     }
 
     & $scriptPath @scriptArgs
