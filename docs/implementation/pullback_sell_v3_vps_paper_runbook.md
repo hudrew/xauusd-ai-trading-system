@@ -57,17 +57,32 @@
 
 - `reports/research_pullback_sell_v3`
 
-如果你准备先拉更长的 MT5 历史再复跑验收，当前要注意一个现实限制：
+如果你准备先拉更长的 MT5 历史再复跑验收，先看这条实际落地经验：
 
-- 这台 Windows VPS 上的 MT5 终端当前只稳定暴露约 `100000` 根 `M1` 历史
-- 如果导出器提示“after collecting X of Y bars”，说明不是策略报错，而是宿主机终端还没加载够历史
-- `2026-03-31` 实测 `probe` 结果：
+- `2026-03-31` 之前，这台 Windows VPS 上的 MT5 终端只稳定暴露约 `100000` 根 `M1` 历史
+- 当时 `probe` 结果是：
   - `bars_available = 100000`
   - `oldest_timestamp = 2025-12-15T18:54:00+00:00`
   - `newest_timestamp = 2026-03-30T19:39:00+00:00`
   - `stopped_reason = (-1, 'Terminal: Call failed')`
-- 这种情况下要先在 MT5 终端侧补更多历史，再重新导出
-- 可以优先检查 MT5 里的 `Tools -> Options -> Charts`
+- 后来已在这台 VPS 上把 MT5 数据目录里的 `config\\common.ini` 改成：
+  - `[Charts] MaxBars=500000`
+- 这台机器当前对应的数据目录是：
+  - `C:\Users\Administrator\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\config\common.ini`
+- 改完并重启 MT5 之后，再次 `probe` 已能达到：
+  - `bars_available >= 300000`
+  - `oldest_timestamp = 2025-05-23T10:04:00+00:00`
+  - `newest_timestamp = 2026-03-30T19:49:00+00:00`
+  - `stopped_reason = probe_limit_reached max_bars=300000`
+- 同一步里，`150000` 根 `M1` 导出已经成功
+- 所以现在如果导出器再报“after collecting X of Y bars”，先不要默认怀疑策略代码，优先检查这台宿主机的 `MaxBars` 是否又被改回去了
+
+如果后面又遇到历史不够，这里是优先处理顺序：
+
+- 先检查 MT5 里的 `Tools -> Options -> Charts`
+- 再检查 `common.ini` 里的 `[Charts] MaxBars`
+- 确认改完后重启 MT5
+- 然后重新跑 `probe`
 - 重点看：
   - `Max. bars in chart`
   - `Max. bars in history`

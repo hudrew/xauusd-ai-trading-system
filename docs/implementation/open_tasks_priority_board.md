@@ -93,13 +93,21 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 
 当前额外注意：
 
-- Windows VPS 上这台 MT5 终端目前只稳定暴露约 `100000` 根 `M1` 历史
-- `2026-03-31` 实测 `probe` 结果：
+- 这条“宿主机历史深度不够”的 blocker 在 `2026-03-31` 已被解除
+- 当天先用 `probe` 看到旧限制：
   - `bars_available = 100000`
   - `oldest_timestamp = 2025-12-15T18:54:00+00:00`
   - `newest_timestamp = 2026-03-30T19:39:00+00:00`
   - `stopped_reason = (-1, 'Terminal: Call failed')`
-- 如果继续请求更长历史，宿主机侧需要先补“更多历史加载”能力，再继续复验
+- 随后已在 VPS 上把 MT5 数据目录 `config\\common.ini` 中的 `[Charts] MaxBars` 从 `100000` 提升到 `500000`
+- 调整后再次实测：
+  - `probe --max-bars 300000` 已达到上限停止
+  - `bars_available >= 300000`
+  - `oldest_timestamp = 2025-05-23T10:04:00+00:00`
+  - `newest_timestamp = 2026-03-30T19:49:00+00:00`
+  - `stopped_reason = probe_limit_reached max_bars=300000`
+- `150000` 根 `M1` 导出已成功
+- 当前需要继续看的，不再是“能不能导出更长历史”，而是“更长样本验收结果是否还能站住”
 - 复验时优先走 `probe` 报告目录，避免覆盖当前纸盘正在使用的正式 latest
 - 当前可直接使用：
   - `scripts/research_pullback_sell_v3_refresh_probe.sh`
