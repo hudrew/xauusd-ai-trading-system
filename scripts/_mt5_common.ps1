@@ -263,6 +263,36 @@ function Get-DefaultMt5MonitoringTaskName {
     return "xauusd-ai-$Mode-monitor-$Role"
 }
 
+function Get-DefaultMt5DailyCheckTaskName {
+    param(
+        [ValidateSet("paper", "prod")]
+        [string]$Mode,
+        [string]$ConfigPath
+    )
+
+    $configSlug = Get-Mt5ConfigSlug -Mode $Mode -ConfigPath $ConfigPath
+    if ($configSlug) {
+        return "xauusd-ai-$Mode-$configSlug-daily-check"
+    }
+
+    return "xauusd-ai-$Mode-daily-check"
+}
+
+function Get-DefaultMt5OpsCheckDir {
+    param(
+        [ValidateSet("paper", "prod")]
+        [string]$Mode,
+        [string]$ConfigPath
+    )
+
+    $configSlug = Get-Mt5ConfigSlug -Mode $Mode -ConfigPath $ConfigPath
+    if ($configSlug) {
+        return (Join-Path $Script:RootDir "var\xauusd_ai\ops_checks\$Mode\$configSlug")
+    }
+
+    return (Join-Path $Script:RootDir "var\xauusd_ai\ops_checks\$Mode")
+}
+
 function Get-DefaultMt5MonitoringLogPath {
     param(
         [ValidateSet("paper", "prod")]

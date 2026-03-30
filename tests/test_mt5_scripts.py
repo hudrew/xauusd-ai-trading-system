@@ -93,6 +93,29 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn("Stop-ScheduledTask", recover_content)
         self.assertIn("StartAfterRegister = $true", recover_content)
 
+    def test_powershell_daily_check_task_scripts_exist(self) -> None:
+        register_script = ROOT / "scripts/mt5_daily_check_register_task.ps1"
+        status_script = ROOT / "scripts/mt5_daily_check_task_status.ps1"
+        unregister_script = ROOT / "scripts/mt5_daily_check_unregister_task.ps1"
+        common_content = (ROOT / "scripts/_mt5_common.ps1").read_text(encoding="utf-8")
+
+        self.assertTrue(register_script.exists())
+        self.assertTrue(status_script.exists())
+        self.assertTrue(unregister_script.exists())
+
+        register_content = register_script.read_text(encoding="utf-8")
+        status_content = status_script.read_text(encoding="utf-8")
+        unregister_content = unregister_script.read_text(encoding="utf-8")
+
+        self.assertIn("Register-ScheduledTask", register_content)
+        self.assertIn("ArchiveScriptPath", register_content)
+        self.assertIn("Get-DefaultMt5DailyCheckTaskName", register_content)
+        self.assertIn("Get-ScheduledTaskInfo", status_content)
+        self.assertIn("Get-DefaultMt5OpsCheckDir", status_content)
+        self.assertIn("Unregister-ScheduledTask", unregister_content)
+        self.assertIn("function Get-DefaultMt5DailyCheckTaskName", common_content)
+        self.assertIn("function Get-DefaultMt5OpsCheckDir", common_content)
+
     def test_pullback_sell_v3_prepare_script_exists(self) -> None:
         script = ROOT / "scripts/mt5_pullback_sell_v3_prepare.ps1"
 
@@ -112,6 +135,9 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
             "scripts/mt5_pullback_sell_v3_task_recover.ps1",
             "scripts/mt5_pullback_sell_v3_task_status.ps1",
             "scripts/mt5_pullback_sell_v3_unregister_task.ps1",
+            "scripts/mt5_pullback_sell_v3_daily_check_register_task.ps1",
+            "scripts/mt5_pullback_sell_v3_daily_check_task_status.ps1",
+            "scripts/mt5_pullback_sell_v3_daily_check_unregister_task.ps1",
         )
 
         for relative_path in relative_paths:
@@ -138,6 +164,30 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
             "mt5_unregister_task.ps1",
             (ROOT / "scripts/mt5_pullback_sell_v3_unregister_task.ps1").read_text(encoding="utf-8"),
         )
+        self.assertIn(
+            "mt5_pullback_sell_v3_daily_check_archive.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v3_daily_check_register_task.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_daily_check_register_task.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v3_daily_check_register_task.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_daily_check_task_status.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v3_daily_check_task_status.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_daily_check_task_status.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v3_daily_check_task_status.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_daily_check_unregister_task.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v3_daily_check_unregister_task.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_daily_check_unregister_task.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v3_daily_check_unregister_task.ps1").read_text(encoding="utf-8"),
+        )
 
     def test_pullback_sell_v3_wrappers_pin_paper_mode_via_env(self) -> None:
         relative_paths = (
@@ -145,6 +195,9 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
             "scripts/mt5_pullback_sell_v3_task_recover.ps1",
             "scripts/mt5_pullback_sell_v3_task_status.ps1",
             "scripts/mt5_pullback_sell_v3_unregister_task.ps1",
+            "scripts/mt5_pullback_sell_v3_daily_check_register_task.ps1",
+            "scripts/mt5_pullback_sell_v3_daily_check_task_status.ps1",
+            "scripts/mt5_pullback_sell_v3_daily_check_unregister_task.ps1",
             "scripts/mt5_pullback_sell_v3_monitoring_dashboard.ps1",
             "scripts/mt5_pullback_sell_v3_monitoring_recover.ps1",
             "scripts/mt5_pullback_sell_v3_monitoring_register_tasks.ps1",
@@ -244,6 +297,9 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         relative_paths = (
             "scripts/mt5_pullback_sell_v3_daily_check.ps1",
             "scripts/mt5_pullback_sell_v3_daily_check_archive.ps1",
+            "scripts/mt5_pullback_sell_v3_daily_check_register_task.ps1",
+            "scripts/mt5_pullback_sell_v3_daily_check_task_status.ps1",
+            "scripts/mt5_pullback_sell_v3_daily_check_unregister_task.ps1",
             "scripts/mt5_pullback_sell_v3_daily_recover.ps1",
             "scripts/mt5_monitoring_export_loop.ps1",
             "scripts/mt5_monitoring_recover.ps1",
@@ -269,6 +325,9 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         wrapper_recover_content = (ROOT / "scripts/mt5_pullback_sell_v3_monitoring_recover.ps1").read_text(encoding="utf-8")
         daily_check_content = (ROOT / "scripts/mt5_pullback_sell_v3_daily_check.ps1").read_text(encoding="utf-8")
         daily_check_archive_content = (ROOT / "scripts/mt5_pullback_sell_v3_daily_check_archive.ps1").read_text(encoding="utf-8")
+        daily_check_register_content = (ROOT / "scripts/mt5_pullback_sell_v3_daily_check_register_task.ps1").read_text(encoding="utf-8")
+        daily_check_status_content = (ROOT / "scripts/mt5_pullback_sell_v3_daily_check_task_status.ps1").read_text(encoding="utf-8")
+        daily_check_unregister_content = (ROOT / "scripts/mt5_pullback_sell_v3_daily_check_unregister_task.ps1").read_text(encoding="utf-8")
         daily_recover_content = (ROOT / "scripts/mt5_pullback_sell_v3_daily_recover.ps1").read_text(encoding="utf-8")
         task_recover_content = (ROOT / "scripts/mt5_pullback_sell_v3_task_recover.ps1").read_text(encoding="utf-8")
 
@@ -325,6 +384,13 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn("FailOnAttention", daily_check_archive_content)
         self.assertIn("mt5_pullback_sell_v3_daily_check.ps1", daily_check_archive_content)
         self.assertIn("[int]$Port = 80", daily_check_archive_content)
+        self.assertIn("mt5_daily_check_register_task.ps1", daily_check_register_content)
+        self.assertIn("mt5_pullback_sell_v3_daily_check_archive.ps1", daily_check_register_content)
+        self.assertIn("IntervalMinutes = 15", daily_check_register_content)
+        self.assertIn("AttentionSyncThreshold", daily_check_register_content)
+        self.assertIn("mt5_daily_check_task_status.ps1", daily_check_status_content)
+        self.assertIn("ArchiveFreshnessWarningMinutes", daily_check_status_content)
+        self.assertIn("mt5_daily_check_unregister_task.ps1", daily_check_unregister_content)
         self.assertIn("mt5_pullback_sell_v3_monitoring_recover.ps1", daily_recover_content)
         self.assertIn("mt5_pullback_sell_v3_daily_check.ps1", daily_recover_content)
         self.assertIn("[int]$Port = 80", daily_recover_content)

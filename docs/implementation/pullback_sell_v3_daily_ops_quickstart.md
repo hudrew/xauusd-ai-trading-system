@@ -48,6 +48,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_archive.ps1 .env.mt5.local
 ```
 
+注册自动归档任务：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_register_task.ps1 .env.mt5.local -StartAfterRegister
+```
+
+检查自动归档任务状态：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_task_status.ps1 .env.mt5.local
+```
+
 如果你希望让脚本直接返回一份机器可读摘要，也可以加：
 
 ```powershell
@@ -60,6 +72,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 - `daily_check_archive` 现在会同时归档：
   - 文本：`var\xauusd_ai\ops_checks\paper\mt5-paper-pullback-sell-v3\latest.txt`
   - JSON：`var\xauusd_ai\ops_checks\paper\mt5-paper-pullback-sell-v3\latest.json`
+- `daily_check_register_task` 默认每 `15` 分钟执行一次归档
+- 对应计划任务默认名称：`xauusd-ai-paper-mt5-paper-pullback-sell-v3-daily-check`
 - 如果你后面要接自动告警、汇总报表或简单趋势统计，优先直接消费 `latest.json`
 
 页面异常时恢复：
@@ -205,6 +219,24 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_archive.ps1 .env.mt5.local
+```
+
+注册自动巡检归档任务：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_register_task.ps1 .env.mt5.local -StartAfterRegister
+```
+
+看自动巡检归档任务状态：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_task_status.ps1 .env.mt5.local
+```
+
+移除自动巡检归档任务：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_unregister_task.ps1 .env.mt5.local
 ```
 
 如果你想把“出现 attention 就让命令失败”也接进自动值守，可以改用：

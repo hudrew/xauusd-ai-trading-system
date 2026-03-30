@@ -43,6 +43,7 @@ cd xauusd-ai-trading-system
 - `docs/implementation/mt5_host_procurement_backlog.md`：宿主机采购延期记录，后续恢复时直接从这里继续
 - `docs/implementation/pullback_sell_v3_daily_ops_quickstart.md`：当前 pullback sell v3 候选线的 VPS 日常值守速查手册
 - `docs/implementation/pullback_sell_v3_paper_observation_template.md`：纸盘连续观察记录模板
+- `docs/implementation/strategy_decision_metrics.md`：解释关 breakout、禁 asia、收紧 pullback 分别看哪些指标
 - `docs/implementation/open_tasks_priority_board.md`：当前剩余任务的优先级清单，方便直接判断先做什么
 - `configs/mvp.yaml`：当前默认配置
 - `src/xauusd_ai_system/`：核心业务、运行时、回测、执行、行情适配
