@@ -176,6 +176,24 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn("report-export", powershell_content)
         self.assertIn("research_pullback_sell_v3_acceptance_latest.json", powershell_content)
 
+    def test_pullback_sell_v3_probe_refresh_scripts_exist(self) -> None:
+        shell_script = ROOT / "scripts/research_pullback_sell_v3_refresh_probe.sh"
+        powershell_script = ROOT / "scripts/research_pullback_sell_v3_refresh_probe.ps1"
+
+        self.assertTrue(shell_script.exists())
+        self.assertTrue(powershell_script.exists())
+        shell_content = shell_script.read_text(encoding="utf-8")
+        powershell_content = powershell_script.read_text(encoding="utf-8")
+
+        self.assertIn("reports/research_pullback_sell_v3_probe", shell_content)
+        self.assertIn("research_pullback_sell_v3_probe_acceptance_latest.json", shell_content)
+        self.assertIn("acceptance", shell_content)
+        self.assertIn("report-export", shell_content)
+        self.assertIn("reports\\research_pullback_sell_v3_probe", powershell_content)
+        self.assertIn("research_pullback_sell_v3_probe_acceptance_latest.json", powershell_content)
+        self.assertIn('"acceptance"', powershell_content)
+        self.assertIn("report-export", powershell_content)
+
     def test_monitoring_dashboard_scripts_avoid_host_variable_collision(self) -> None:
         base_script = ROOT / "scripts/mt5_monitoring_dashboard.ps1"
         wrapper_script = ROOT / "scripts/mt5_pullback_sell_v3_monitoring_dashboard.ps1"

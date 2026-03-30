@@ -95,6 +95,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 
 - Windows VPS 上这台 MT5 终端目前只稳定暴露约 `100000` 根 `M1` 历史
 - 如果继续请求更长历史，宿主机侧需要先补“更多历史加载”能力，再继续复验
+- 复验时优先走 `probe` 报告目录，避免覆盖当前纸盘正在使用的正式 latest
+- 当前可直接使用：
+  - `scripts/research_pullback_sell_v3_refresh_probe.sh`
+  - `scripts/research_pullback_sell_v3_refresh_probe.ps1`
 
 ### 3. 继续收缩当前候选策略，而不是放宽门槛
 

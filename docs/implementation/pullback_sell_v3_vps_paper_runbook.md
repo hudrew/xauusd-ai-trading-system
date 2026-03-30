@@ -68,6 +68,23 @@
   - `Max. bars in history`
 - 如果改完还没生效，再重启一次 MT5 终端后重试导出
 
+如果你只是想先做“更长样本 probe 复验”，不想覆盖当前纸盘正在使用的正式 `latest`，优先改用：
+
+```bash
+./scripts/research_pullback_sell_v3_refresh_probe.sh
+```
+
+或 Windows PowerShell：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\research_pullback_sell_v3_refresh_probe.ps1
+```
+
+这条安全入口会固定写到：
+
+- `reports/research_pullback_sell_v3_probe`
+- `tmp/research_pullback_sell_v3_probe_acceptance_latest.json`
+
 ### 2. 导出一份可传输 JSON
 
 ```bash
