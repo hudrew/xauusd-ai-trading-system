@@ -509,6 +509,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitori
 
 - `mt5_monitoring_recover.ps1` 现在会在重启监控任务前，先清理同配置残留的 `monitoring dashboard / monitoring export loop / export-html` 进程树
 - 这样可以避免旧的手工 `serve` 或旧计划任务继续占着 `80 / 8765 / 8080` 一类端口，导致页面表面能打开、实际不是当前任务在刷新
+- 监控计划任务现在不再直接挂 `mt5_monitoring_dashboard.ps1 / mt5_monitoring_export_loop.ps1`
+- 现在会先进入 `mt5_monitoring_task_runner.ps1`，由 runner 持续托管 `serve / refresh` 子进程，并在日志里写 `monitoring_runner_started / monitoring_runner_heartbeat`
 - 如果只是想停掉监控任务，可执行：
 
 ```powershell

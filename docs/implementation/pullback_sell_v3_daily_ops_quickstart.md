@@ -127,6 +127,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 - `refresh` 是不是 `Running`
 - `dashboard_updated_at` 有没有持续更新
 - `health_status_code` 对应页面能否返回 `200`
+- `serve.log` 里是否开始持续出现 `monitoring_runner_heartbeat`
 
 如果页面正常刷新，现在优先看的新增面板是：
 
