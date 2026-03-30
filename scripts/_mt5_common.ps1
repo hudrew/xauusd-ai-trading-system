@@ -271,5 +271,10 @@ function Get-Mt5MonitoringSnapshot {
         "--stale-after-seconds" `
         "$StaleAfterSeconds"
 
-    return ($snapshotJson | ConvertFrom-Json -Depth 8)
+    $convertFromJsonCommand = Get-Command ConvertFrom-Json -ErrorAction Stop
+    if ($convertFromJsonCommand.Parameters.ContainsKey("Depth")) {
+        return ($snapshotJson | ConvertFrom-Json -Depth 8)
+    }
+
+    return ($snapshotJson | ConvertFrom-Json)
 }
