@@ -6,6 +6,7 @@ param(
     [string]$RefreshTaskName,
     [string]$ServeLogPath,
     [string]$RefreshLogPath,
+    [switch]$AsJson,
     [switch]$TailLog,
     [int]$TailLines = 40
 )
@@ -27,6 +28,7 @@ try {
         RefreshTaskName = $RefreshTaskName
         ServeLogPath = $ServeLogPath
         RefreshLogPath = $RefreshLogPath
+        AsJson = $AsJson
         TailLog = $TailLog
         TailLines = $TailLines
     }

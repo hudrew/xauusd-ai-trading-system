@@ -48,6 +48,20 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_archive.ps1 .env.mt5.local
 ```
 
+如果你希望让脚本直接返回一份机器可读摘要，也可以加：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check.ps1 .env.mt5.local -AsJson
+```
+
+当前补充：
+
+- `daily_check` 现在除了人读输出，也支持 `-AsJson`
+- `daily_check_archive` 现在会同时归档：
+  - 文本：`var\xauusd_ai\ops_checks\paper\mt5-paper-pullback-sell-v3\latest.txt`
+  - JSON：`var\xauusd_ai\ops_checks\paper\mt5-paper-pullback-sell-v3\latest.json`
+- 如果你后面要接自动告警、汇总报表或简单趋势统计，优先直接消费 `latest.json`
+
 页面异常时恢复：
 
 ```powershell
@@ -190,6 +204,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_archive.ps1 .env.mt5.local
+```
+
+如果你想把“出现 attention 就让命令失败”也接进自动值守，可以改用：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_archive.ps1 .env.mt5.local -FailOnAttention
 ```
 
 一键监控恢复：

@@ -46,6 +46,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_archive.ps1 .env.mt5.local
 ```
 
+如需留存机器可读摘要，可直接读取：
+
+- `var\xauusd_ai\ops_checks\paper\mt5-paper-pullback-sell-v3\latest.json`
+
 如需恢复监控：
 
 ```powershell
