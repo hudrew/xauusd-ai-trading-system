@@ -238,6 +238,31 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitori
 - 但默认没有鉴权，建议只在 VPS 内网、堡垒机或临时开放端口场景下使用
 - 如果对公网开放，请至少配合 Windows 防火墙白名单或反向代理鉴权
 
+如果你希望 VPS 重启后自动恢复监控，并且持续把静态 HTML 落盘刷新，可以直接注册两条监控计划任务：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_register_tasks.ps1 .env.mt5.local -BindHost 0.0.0.0 -Port 8765 -StartAfterRegister
+```
+
+这条命令会注册：
+
+- `...-monitor-serve`
+  负责把只读监控 HTTP 页面拉起来
+- `...-monitor-refresh`
+  负责周期性刷新静态 HTML 到本地磁盘
+
+查看状态：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_task_status.ps1 .env.mt5.local -TailLog
+```
+
+移除监控自启任务：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_unregister_tasks.ps1 .env.mt5.local
+```
+
 如果需要移除：
 
 ```powershell

@@ -147,6 +147,55 @@ function Get-DefaultMt5TaskLogDir {
     return (Join-Path $Script:RootDir "var\xauusd_ai\task_logs\$Mode")
 }
 
+function Get-DefaultMt5MonitoringDashboardPath {
+    param(
+        [ValidateSet("paper", "prod")]
+        [string]$Mode,
+        [string]$ConfigPath
+    )
+
+    $configSlug = Get-Mt5ConfigSlug -Mode $Mode -ConfigPath $ConfigPath
+    $dashboardName = if ($configSlug) { "$configSlug.html" } else { "$Mode.html" }
+    return (Join-Path $Script:RootDir "var\xauusd_ai\dashboards\$dashboardName")
+}
+
+function Get-DefaultMt5MonitoringTaskName {
+    param(
+        [ValidateSet("paper", "prod")]
+        [string]$Mode,
+        [string]$ConfigPath,
+        [ValidateSet("serve", "refresh")]
+        [string]$Role
+    )
+
+    $configSlug = Get-Mt5ConfigSlug -Mode $Mode -ConfigPath $ConfigPath
+    if ($configSlug) {
+        return "xauusd-ai-$Mode-$configSlug-monitor-$Role"
+    }
+
+    return "xauusd-ai-$Mode-monitor-$Role"
+}
+
+function Get-DefaultMt5MonitoringLogPath {
+    param(
+        [ValidateSet("paper", "prod")]
+        [string]$Mode,
+        [string]$ConfigPath,
+        [ValidateSet("serve", "refresh")]
+        [string]$Role
+    )
+
+    $configSlug = Get-Mt5ConfigSlug -Mode $Mode -ConfigPath $ConfigPath
+    $baseDir = if ($configSlug) {
+        Join-Path $Script:RootDir "var\xauusd_ai\monitoring_logs\$Mode\$configSlug"
+    }
+    else {
+        Join-Path $Script:RootDir "var\xauusd_ai\monitoring_logs\$Mode"
+    }
+
+    return (Join-Path $baseDir "$Role.log")
+}
+
 function Ensure-Directory {
     param(
         [Parameter(Mandatory = $true)]
