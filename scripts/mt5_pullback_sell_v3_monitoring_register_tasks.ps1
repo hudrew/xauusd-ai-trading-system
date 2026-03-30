@@ -4,7 +4,7 @@ param(
     [string]$DashboardPath,
     [Alias("Host")]
     [string]$BindHost = "0.0.0.0",
-    [int]$Port = 8765,
+    [int]$Port = 80,
     [int]$DecisionLimit = 120,
     [int]$ExecutionLimit = 40,
     [int]$StaleAfterSeconds = 120,

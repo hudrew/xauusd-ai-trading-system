@@ -4,7 +4,7 @@ param(
     [string]$OutputPath,
     [Alias("Host")]
     [string]$BindHost = "127.0.0.1",
-    [int]$Port = 8765,
+    [int]$Port = 80,
     [int]$DecisionLimit = 120,
     [int]$ExecutionLimit = 40,
     [int]$StaleAfterSeconds = 120,

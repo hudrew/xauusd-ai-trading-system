@@ -214,14 +214,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitori
 直接启动只读 HTTP 页面：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_dashboard.ps1 .env.mt5.local -Serve -Host 0.0.0.0 -Port 8765
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_dashboard.ps1 .env.mt5.local -Serve -Host 0.0.0.0
 ```
 
 启动后可访问：
 
-- `http://<VPS-IP>:8765/`
-- `http://<VPS-IP>:8765/api/snapshot`
-- `http://<VPS-IP>:8765/health`
+- `http://<VPS-IP>/`
+- `http://<VPS-IP>/api/snapshot`
+- `http://<VPS-IP>/health`
 
 这个监控页当前会展示：
 
@@ -241,7 +241,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitori
 如果你希望 VPS 重启后自动恢复监控，并且持续把静态 HTML 落盘刷新，可以直接注册两条监控计划任务：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_register_tasks.ps1 .env.mt5.local -BindHost 0.0.0.0 -Port 8765 -StartAfterRegister
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_register_tasks.ps1 .env.mt5.local -BindHost 0.0.0.0 -StartAfterRegister
 ```
 
 这条命令会注册：
@@ -250,6 +250,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitori
   负责把只读监控 HTTP 页面拉起来
 - `...-monitor-refresh`
   负责周期性刷新静态 HTML 到本地磁盘
+
+当前这条候选线已经把公网监控默认端口统一成 `80`。
+
+- 直接访问入口：`http://<VPS-IP>/`
+- 如果你手动执行恢复脚本，也建议直接用默认值，不再额外传 `-Port 8765`
 
 查看状态：
 

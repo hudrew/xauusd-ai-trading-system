@@ -189,6 +189,7 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn("$BindHost", wrapper_content)
         self.assertIn('"monitoring"', base_content)
         self.assertIn("mt5_monitoring_dashboard.ps1", wrapper_content)
+        self.assertIn("[int]$Port = 80", wrapper_content)
 
     def test_monitoring_autostart_scripts_exist(self) -> None:
         relative_paths = (
@@ -228,6 +229,8 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn('$env:XAUUSD_AI_ENV = $Mode', recover_content)
         self.assertIn("configs\\mt5_paper_pullback_sell_v3.yaml", wrapper_register_content)
         self.assertIn("mt5_monitoring_recover.ps1", wrapper_recover_content)
+        self.assertIn("[int]$Port = 80", wrapper_register_content)
+        self.assertIn("[int]$Port = 80", wrapper_recover_content)
 
 
 if __name__ == "__main__":

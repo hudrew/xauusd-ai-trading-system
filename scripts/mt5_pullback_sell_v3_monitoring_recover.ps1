@@ -3,7 +3,7 @@ param(
     [string]$EnvFile,
     [Alias("Host")]
     [string]$BindHost = "0.0.0.0",
-    [int]$Port = 8765,
+    [int]$Port = 80,
     [string]$DashboardPath,
     [int]$DecisionLimit = 120,
     [int]$ExecutionLimit = 40,
