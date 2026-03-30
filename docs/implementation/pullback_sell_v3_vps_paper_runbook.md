@@ -198,7 +198,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_task_sta
 - `health: ok` 表示当前没有发现明显异常
 - `state: Running` 表示计划任务正在跑
 - `last_task_result_hex: 0x00041301` 在这里是正常值，含义是任务当前正在运行
-- `latest_log_age_seconds` 如果持续大于 `freshness_warning_seconds`，说明任务可能卡住，需要看日志
+- 任务运行器默认每 `30s` 会写一次 `task_runner_heartbeat`
+- `latest_log_age_seconds` 如果在 `state: Running` 时持续大于 `freshness_warning_seconds`，说明连心跳都没有更新，任务大概率卡住，需要看日志
 - `latest_log_has_failure_pattern: True` 说明最近日志里已经出现 `live_cycle_failed` 或 `task_runner_failed`
 
 兼容性说明：

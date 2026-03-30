@@ -5,6 +5,8 @@ param(
     [string]$ConfigPath,
     [string]$LogDir,
     [int]$KeepFiles = 20,
+    [ValidateRange(1, 3600)]
+    [int]$HeartbeatIntervalSeconds = 30,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$CliArgs
 )
@@ -96,7 +98,7 @@ $stdoutPath = [System.IO.Path]::GetTempFileName()
 $stderrPath = [System.IO.Path]::GetTempFileName()
 $powershellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 
-Write-TaskRunnerLogLine -LogPath $logPath -Message ("task_runner_started mode={0} env_file={1} config_path={2} loop_script={3}" -f $Mode, $resolvedEnvFile, $resolvedConfigPath, $loopScriptPath)
+Write-TaskRunnerLogLine -LogPath $logPath -Message ("task_runner_started mode={0} env_file={1} config_path={2} loop_script={3} heartbeat_interval_seconds={4}" -f $Mode, $resolvedEnvFile, $resolvedConfigPath, $loopScriptPath, $HeartbeatIntervalSeconds)
 
 Push-Location $Script:RootDir
 try {
@@ -119,11 +121,20 @@ try {
         -FilePath $powershellExe `
         -ArgumentList $processArguments `
         -WorkingDirectory $Script:RootDir `
-        -Wait `
         -PassThru `
         -WindowStyle Hidden `
         -RedirectStandardOutput $stdoutPath `
         -RedirectStandardError $stderrPath
+
+    $processStartedAt = Get-Date
+    $heartbeatIntervalMilliseconds = $HeartbeatIntervalSeconds * 1000
+
+    while (-not $process.WaitForExit($heartbeatIntervalMilliseconds)) {
+        $elapsedSeconds = [Math]::Round(((Get-Date) - $processStartedAt).TotalSeconds, 0)
+        Write-TaskRunnerLogLine -LogPath $logPath -Message ("task_runner_heartbeat mode={0} pid={1} elapsed_seconds={2}" -f $Mode, $process.Id, $elapsedSeconds)
+    }
+
+    $process.WaitForExit()
 
     Append-LogFileContents -SourcePath $stdoutPath -DestinationPath $logPath
     Append-LogFileContents -SourcePath $stderrPath -DestinationPath $logPath

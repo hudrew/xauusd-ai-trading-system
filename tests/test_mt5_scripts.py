@@ -69,6 +69,9 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn("mt5_paper_loop.ps1", register_content)
         self.assertIn("Unregister-ScheduledTask", unregister_content)
         self.assertIn("Get-DefaultMt5TaskLogDir", runner_content)
+        self.assertIn("HeartbeatIntervalSeconds = 30", runner_content)
+        self.assertIn("task_runner_heartbeat", runner_content)
+        self.assertIn("WaitForExit($heartbeatIntervalMilliseconds)", runner_content)
         self.assertIn("Get-ScheduledTaskInfo", status_content)
         self.assertIn("Latest log tail", status_content)
 
