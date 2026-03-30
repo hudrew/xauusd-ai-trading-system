@@ -507,6 +507,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_unregister_task.ps1 -Mode
 - `var/` 或数据库中的审计记录
 - 结构化日志里的 `live_cycle_failed`
 - `execution_attempts` 表中的错误信息
+- 如果日志里出现 `IPC initialize failed` 或 `Pipe server didn't answer`
+  先确认任务是不是跑在已经登录过 MT5 的交互式用户会话里，并检查任务启动前是否已把 MT5 terminal 进程拉起和预热
 - `execution_syncs` 表中的：
   - `sync_status`
   - `payload_json.sync_result.sync_origin`

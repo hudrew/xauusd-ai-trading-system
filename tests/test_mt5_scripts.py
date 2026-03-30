@@ -69,6 +69,7 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         runner_content = runner_script.read_text(encoding="utf-8")
         status_content = status_script.read_text(encoding="utf-8")
         recover_content = recover_script.read_text(encoding="utf-8")
+        common_content = (ROOT / "scripts/_mt5_common.ps1").read_text(encoding="utf-8")
 
         self.assertIn("Register-ScheduledTask", register_content)
         self.assertIn("New-ScheduledTaskAction", register_content)
@@ -81,6 +82,10 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn("HeartbeatIntervalSeconds = 30", runner_content)
         self.assertIn("task_runner_heartbeat", runner_content)
         self.assertIn("WaitForExit($heartbeatIntervalMilliseconds)", runner_content)
+        self.assertIn("Ensure-Mt5TerminalProcess", runner_content)
+        self.assertIn("terminal_process_ready", runner_content)
+        self.assertIn("function Ensure-Mt5TerminalProcess", common_content)
+        self.assertIn("function Get-Mt5TerminalProcess", common_content)
         self.assertIn("Get-ScheduledTaskInfo", status_content)
         self.assertIn("Latest log tail", status_content)
         self.assertIn("mt5_register_task.ps1", recover_content)

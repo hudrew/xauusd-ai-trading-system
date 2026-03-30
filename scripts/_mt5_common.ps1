@@ -18,6 +18,93 @@ function Resolve-AbsoluteProjectPath {
     return [System.IO.Path]::GetFullPath((Join-Path $Script:RootDir $PathValue))
 }
 
+function Resolve-Mt5TerminalPath {
+    param(
+        [string]$TerminalPath = $env:XAUUSD_AI_MT5_PATH
+    )
+
+    if ([string]::IsNullOrWhiteSpace($TerminalPath)) {
+        return $null
+    }
+
+    if ([System.IO.Path]::IsPathRooted($TerminalPath)) {
+        return [System.IO.Path]::GetFullPath($TerminalPath)
+    }
+
+    return [System.IO.Path]::GetFullPath((Join-Path $Script:RootDir $TerminalPath))
+}
+
+function Get-Mt5TerminalProcess {
+    param(
+        [string]$TerminalPath = $env:XAUUSD_AI_MT5_PATH
+    )
+
+    $resolvedTerminalPath = Resolve-Mt5TerminalPath -TerminalPath $TerminalPath
+    if ([string]::IsNullOrWhiteSpace($resolvedTerminalPath)) {
+        return $null
+    }
+
+    return Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.ExecutablePath -and [string]::Equals(
+                [System.IO.Path]::GetFullPath($_.ExecutablePath),
+                $resolvedTerminalPath,
+                [System.StringComparison]::OrdinalIgnoreCase
+            )
+        } |
+        Select-Object -First 1
+}
+
+function Ensure-Mt5TerminalProcess {
+    param(
+        [string]$TerminalPath = $env:XAUUSD_AI_MT5_PATH,
+        [int]$ReadyWaitSeconds = 30,
+        [int]$WarmupSeconds = 10
+    )
+
+    $resolvedTerminalPath = Resolve-Mt5TerminalPath -TerminalPath $TerminalPath
+    if ([string]::IsNullOrWhiteSpace($resolvedTerminalPath)) {
+        return $null
+    }
+
+    if (-not (Test-Path $resolvedTerminalPath)) {
+        return $null
+    }
+
+    $existingProcess = Get-Mt5TerminalProcess -TerminalPath $resolvedTerminalPath
+    if ($null -ne $existingProcess) {
+        return [PSCustomObject]@{
+            Started = $false
+            ProcessId = $existingProcess.ProcessId
+            TerminalPath = $resolvedTerminalPath
+        }
+    }
+
+    Start-Process `
+        -FilePath $resolvedTerminalPath `
+        -WorkingDirectory (Split-Path -Parent $resolvedTerminalPath) | Out-Null
+
+    $deadline = (Get-Date).AddSeconds($ReadyWaitSeconds)
+    do {
+        Start-Sleep -Seconds 1
+        $startedProcess = Get-Mt5TerminalProcess -TerminalPath $resolvedTerminalPath
+    } while ($null -eq $startedProcess -and (Get-Date) -lt $deadline)
+
+    if ($null -eq $startedProcess) {
+        throw "MT5 terminal process did not become ready within $ReadyWaitSeconds seconds: $resolvedTerminalPath"
+    }
+
+    if ($WarmupSeconds -gt 0) {
+        Start-Sleep -Seconds $WarmupSeconds
+    }
+
+    return [PSCustomObject]@{
+        Started = $true
+        ProcessId = $startedProcess.ProcessId
+        TerminalPath = $resolvedTerminalPath
+    }
+}
+
 function Ensure-Venv {
     if (-not (Test-Path $Script:VenvPython)) {
         throw "Missing virtual environment python: $Script:VenvPython`nCreate it first with: py -3.10 -m venv .venv"

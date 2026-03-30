@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import time
 from typing import Any
+
+SESSION_BIND_RETRY_ATTEMPTS = 3
+SESSION_BIND_RETRY_DELAY_SECONDS = 1.0
+ACCOUNT_INFO_RECHECK_ATTEMPTS = 3
+ACCOUNT_INFO_RECHECK_DELAY_SECONDS = 0.2
 
 
 def initialize_mt5_session(
@@ -11,33 +17,45 @@ def initialize_mt5_session(
     password: str | None = None,
     server: str | None = None,
 ) -> None:
-    initialized = mt5.initialize(
-        path=path,
-        login=login,
-        password=password,
-        server=server,
-    )
-    if not initialized:
-        raise RuntimeError(f"MT5 initialize failed: {mt5.last_error()}")
+    last_error: RuntimeError | None = None
 
-    try:
-        _login_if_supported(
-            mt5,
-            login=login,
-            password=password,
-            server=server,
-        )
-        _verify_account_binding(
-            mt5,
-            login=login,
-            server=server,
-        )
-    except Exception:
+    for attempt in range(1, SESSION_BIND_RETRY_ATTEMPTS + 1):
         try:
-            mt5.shutdown()
-        except Exception:
-            pass
-        raise
+            initialized = mt5.initialize(
+                path=path,
+                login=login,
+                password=password,
+                server=server,
+            )
+            if not initialized:
+                raise RuntimeError(f"MT5 initialize failed: {mt5.last_error()}")
+
+            _login_if_supported(
+                mt5,
+                login=login,
+                password=password,
+                server=server,
+            )
+            _verify_account_binding(
+                mt5,
+                login=login,
+                server=server,
+            )
+            return
+        except RuntimeError as exc:
+            last_error = exc
+            try:
+                mt5.shutdown()
+            except Exception:
+                pass
+            if attempt >= SESSION_BIND_RETRY_ATTEMPTS:
+                break
+            time.sleep(SESSION_BIND_RETRY_DELAY_SECONDS)
+
+    if last_error is not None:
+        raise RuntimeError(
+            f"{last_error} after {SESSION_BIND_RETRY_ATTEMPTS} session attempts"
+        )
 
 
 def _login_if_supported(
@@ -84,30 +102,43 @@ def _verify_account_binding(
     if account_info_fn is None:
         return
 
-    account_info = account_info_fn()
-    if account_info is None:
-        raise RuntimeError(f"MT5 account_info failed after login: {mt5.last_error()}")
+    last_error: RuntimeError | None = None
+    for attempt in range(1, ACCOUNT_INFO_RECHECK_ATTEMPTS + 1):
+        account_info = account_info_fn()
+        if account_info is None:
+            last_error = RuntimeError(f"MT5 account_info failed after login: {mt5.last_error()}")
+        else:
+            actual_login = _normalize_login(getattr(account_info, "login", None))
+            actual_server = _normalize_string(getattr(account_info, "server", None))
+            account_matches = (
+                expected_login is None
+                or actual_login is None
+                or actual_login == expected_login
+            )
+            server_matches = (
+                expected_server is None
+                or actual_server is None
+                or actual_server == expected_server
+            )
+            if account_matches and server_matches:
+                return
 
-    actual_login = _normalize_login(getattr(account_info, "login", None))
-    actual_server = _normalize_string(getattr(account_info, "server", None))
+            actual_target = _format_target(login=actual_login, server=actual_server)
+            expected_target = _format_target(login=expected_login, server=expected_server)
+            if not account_matches:
+                last_error = RuntimeError(
+                    f"MT5 connected to unexpected account {actual_target}; expected {expected_target}"
+                )
+            else:
+                last_error = RuntimeError(
+                    f"MT5 connected to unexpected server {actual_target}; expected {expected_target}"
+                )
 
-    if expected_login is not None and actual_login is not None and actual_login != expected_login:
-        actual_target = _format_target(login=actual_login, server=actual_server)
-        expected_target = _format_target(login=expected_login, server=expected_server)
-        raise RuntimeError(
-            f"MT5 connected to unexpected account {actual_target}; expected {expected_target}"
-        )
+        if attempt < ACCOUNT_INFO_RECHECK_ATTEMPTS:
+            time.sleep(ACCOUNT_INFO_RECHECK_DELAY_SECONDS)
 
-    if (
-        expected_server is not None
-        and actual_server is not None
-        and actual_server != expected_server
-    ):
-        actual_target = _format_target(login=actual_login, server=actual_server)
-        expected_target = _format_target(login=expected_login, server=expected_server)
-        raise RuntimeError(
-            f"MT5 connected to unexpected server {actual_target}; expected {expected_target}"
-        )
+    if last_error is not None:
+        raise last_error
 
 
 def _normalize_login(value: Any) -> int | None:

@@ -102,6 +102,17 @@ Write-TaskRunnerLogLine -LogPath $logPath -Message ("task_runner_started mode={0
 
 Push-Location $Script:RootDir
 try {
+    $terminalProcess = Ensure-Mt5TerminalProcess
+    if ($null -ne $terminalProcess) {
+        Write-TaskRunnerLogLine -LogPath $logPath -Message (
+            "terminal_process_ready mode={0} started={1} pid={2} path={3}" -f
+            $Mode,
+            $terminalProcess.Started,
+            $terminalProcess.ProcessId,
+            $terminalProcess.TerminalPath
+        )
+    }
+
     $processArguments = @(
         "-NoProfile"
         "-ExecutionPolicy"

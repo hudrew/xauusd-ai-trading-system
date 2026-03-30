@@ -6,7 +6,10 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from xauusd_ai_system.mt5_session import initialize_mt5_session
+from xauusd_ai_system.mt5_session import (
+    SESSION_BIND_RETRY_ATTEMPTS,
+    initialize_mt5_session,
+)
 
 
 class FakeMT5SessionModule:
@@ -17,11 +20,13 @@ class FakeMT5SessionModule:
         login_ok: bool = True,
         account_login: int = 60065894,
         account_server: str = "TradeMaxGlobal-Demo",
+        account_info_sequence: list[tuple[int, str]] | None = None,
     ) -> None:
         self.initialize_ok = initialize_ok
         self.login_ok = login_ok
         self.account_login = account_login
         self.account_server = account_server
+        self.account_info_sequence = list(account_info_sequence or [])
         self.initialize_calls: list[dict[str, object]] = []
         self.login_calls: list[dict[str, object]] = []
         self.shutdown_calls = 0
@@ -35,9 +40,16 @@ class FakeMT5SessionModule:
         return self.login_ok
 
     def account_info(self):
+        if self.account_info_sequence:
+            login, server = self.account_info_sequence.pop(0)
+        else:
+            login, server = self.account_login, self.account_server
+
         class AccountInfo:
-            login = self.account_login
-            server = self.account_server
+            pass
+
+        AccountInfo.login = login
+        AccountInfo.server = server
 
         return AccountInfo()
 
@@ -78,7 +90,7 @@ class MT5SessionTests(unittest.TestCase):
                 server="TradeMaxGlobal-Demo",
             )
 
-        self.assertEqual(fake_mt5.shutdown_calls, 1)
+        self.assertEqual(fake_mt5.shutdown_calls, SESSION_BIND_RETRY_ATTEMPTS)
 
     def test_initialize_session_raises_when_terminal_stays_on_wrong_account(self) -> None:
         fake_mt5 = FakeMT5SessionModule(
@@ -95,7 +107,26 @@ class MT5SessionTests(unittest.TestCase):
                 server="TradeMaxGlobal-Demo",
             )
 
-        self.assertEqual(fake_mt5.shutdown_calls, 1)
+        self.assertEqual(fake_mt5.shutdown_calls, SESSION_BIND_RETRY_ATTEMPTS)
+
+    def test_initialize_session_rechecks_account_binding_before_failing(self) -> None:
+        fake_mt5 = FakeMT5SessionModule(
+            account_info_sequence=[
+                (50182922, "TradeMaxGlobal-Live"),
+                (60065894, "TradeMaxGlobal-Demo"),
+            ]
+        )
+
+        initialize_mt5_session(
+            fake_mt5,
+            path=None,
+            login=60065894,
+            password="secret",
+            server="TradeMaxGlobal-Demo",
+        )
+
+        self.assertEqual(fake_mt5.shutdown_calls, 0)
+        self.assertEqual(len(fake_mt5.login_calls), 1)
 
 
 if __name__ == "__main__":
