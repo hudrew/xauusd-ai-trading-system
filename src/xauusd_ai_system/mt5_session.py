@@ -110,29 +110,35 @@ def _verify_account_binding(
         else:
             actual_login = _normalize_login(getattr(account_info, "login", None))
             actual_server = _normalize_string(getattr(account_info, "server", None))
-            account_matches = (
-                expected_login is None
-                or actual_login is None
-                or actual_login == expected_login
-            )
-            server_matches = (
-                expected_server is None
-                or actual_server is None
-                or actual_server == expected_server
-            )
-            if account_matches and server_matches:
+            if expected_login is not None and actual_login is None:
+                expected_target = _format_target(login=expected_login, server=expected_server)
+                last_error = RuntimeError(
+                    f"MT5 account_info returned no login; expected {expected_target}"
+                )
+            elif expected_server is not None and actual_server is None:
+                expected_target = _format_target(login=expected_login, server=expected_server)
+                last_error = RuntimeError(
+                    f"MT5 account_info returned no server; expected {expected_target}"
+                )
+            elif (
+                (expected_login is None or actual_login == expected_login)
+                and (expected_server is None or actual_server == expected_server)
+            ):
                 return
-
-            actual_target = _format_target(login=actual_login, server=actual_server)
-            expected_target = _format_target(login=expected_login, server=expected_server)
-            if not account_matches:
-                last_error = RuntimeError(
-                    f"MT5 connected to unexpected account {actual_target}; expected {expected_target}"
-                )
             else:
-                last_error = RuntimeError(
-                    f"MT5 connected to unexpected server {actual_target}; expected {expected_target}"
+                actual_target = _format_target(login=actual_login, server=actual_server)
+                expected_target = _format_target(
+                    login=expected_login,
+                    server=expected_server,
                 )
+                if expected_login is not None and actual_login != expected_login:
+                    last_error = RuntimeError(
+                        f"MT5 connected to unexpected account {actual_target}; expected {expected_target}"
+                    )
+                else:
+                    last_error = RuntimeError(
+                        f"MT5 connected to unexpected server {actual_target}; expected {expected_target}"
+                    )
 
         if attempt < ACCOUNT_INFO_RECHECK_ATTEMPTS:
             time.sleep(ACCOUNT_INFO_RECHECK_DELAY_SECONDS)
@@ -144,13 +150,21 @@ def _verify_account_binding(
 def _normalize_login(value: Any) -> int | None:
     if value in (None, ""):
         return None
-    return int(value)
+
+    normalized = int(value)
+    if normalized <= 0:
+        return None
+    return normalized
 
 
 def _normalize_string(value: Any) -> str | None:
     if value in (None, ""):
         return None
-    return str(value)
+
+    normalized = str(value).strip()
+    if normalized == "":
+        return None
+    return normalized
 
 
 def _format_target(*, login: int | None, server: str | None) -> str:

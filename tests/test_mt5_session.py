@@ -7,6 +7,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from xauusd_ai_system.mt5_session import (
+    ACCOUNT_INFO_RECHECK_ATTEMPTS,
     SESSION_BIND_RETRY_ATTEMPTS,
     initialize_mt5_session,
 )
@@ -127,6 +128,43 @@ class MT5SessionTests(unittest.TestCase):
 
         self.assertEqual(fake_mt5.shutdown_calls, 0)
         self.assertEqual(len(fake_mt5.login_calls), 1)
+
+    def test_initialize_session_retries_when_account_info_is_unbound(self) -> None:
+        fake_mt5 = FakeMT5SessionModule(
+            account_info_sequence=[
+                (0, ""),
+                (60065894, "TradeMaxGlobal-Demo"),
+            ]
+        )
+
+        initialize_mt5_session(
+            fake_mt5,
+            path=None,
+            login=60065894,
+            password="secret",
+            server="TradeMaxGlobal-Demo",
+        )
+
+        self.assertEqual(fake_mt5.shutdown_calls, 0)
+        self.assertEqual(len(fake_mt5.login_calls), 1)
+
+    def test_initialize_session_raises_when_account_info_never_binds(self) -> None:
+        fake_mt5 = FakeMT5SessionModule(
+            account_info_sequence=[
+                (0, "")
+            ] * (SESSION_BIND_RETRY_ATTEMPTS * ACCOUNT_INFO_RECHECK_ATTEMPTS),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "returned no login"):
+            initialize_mt5_session(
+                fake_mt5,
+                path=None,
+                login=60065894,
+                password="secret",
+                server="TradeMaxGlobal-Demo",
+            )
+
+        self.assertEqual(fake_mt5.shutdown_calls, SESSION_BIND_RETRY_ATTEMPTS)
 
 
 if __name__ == "__main__":
