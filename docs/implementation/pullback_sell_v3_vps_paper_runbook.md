@@ -178,6 +178,25 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_task_status.ps1 -Mode pap
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_task_status.ps1 .env.mt5.local -TailLog
 ```
 
+如果你想连续盯几轮，不要反复手敲，可以直接：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_task_status.ps1 .env.mt5.local -WatchCount 6 -WatchIntervalSeconds 10 -TailLog
+```
+
+几个关键读数：
+
+- `health: ok` 表示当前没有发现明显异常
+- `state: Running` 表示计划任务正在跑
+- `last_task_result_hex: 0x00041301` 在这里是正常值，含义是任务当前正在运行
+- `latest_log_age_seconds` 如果持续大于 `freshness_warning_seconds`，说明任务可能卡住，需要看日志
+- `latest_log_has_failure_pattern: True` 说明最近日志里已经出现 `live_cycle_failed` 或 `task_runner_failed`
+
+兼容性说明：
+
+- Windows Server 2019 上计划任务注册使用 `Interactive` 登录类型
+- 任务运行器已改成子进程日志收集，避免把普通 Python 输出误判成失败
+
 如果需要移除：
 
 ```powershell

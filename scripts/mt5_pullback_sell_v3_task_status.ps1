@@ -4,7 +4,10 @@ param(
     [string]$TaskName,
     [switch]$AsJson,
     [switch]$TailLog,
-    [int]$TailLines = 40
+    [int]$TailLines = 40,
+    [int]$FreshnessWarningSeconds = 120,
+    [int]$WatchCount = 1,
+    [int]$WatchIntervalSeconds = 15
 )
 
 Set-StrictMode -Version Latest
@@ -18,5 +21,7 @@ $scriptPath = Join-Path $PSScriptRoot "mt5_task_status.ps1"
     -TaskName $TaskName `
     -AsJson:$AsJson `
     -TailLog:$TailLog `
-    -TailLines $TailLines
-
+    -TailLines $TailLines `
+    -FreshnessWarningSeconds $FreshnessWarningSeconds `
+    -WatchCount $WatchCount `
+    -WatchIntervalSeconds $WatchIntervalSeconds
