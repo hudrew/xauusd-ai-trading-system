@@ -4,6 +4,11 @@
 
 - `docs/implementation/pullback_sell_v3_daily_ops_quickstart.md`
 
+另外现在也有两个更短的值守脚本：
+
+- `scripts/mt5_pullback_sell_v3_daily_check.ps1`
+- `scripts/mt5_pullback_sell_v3_daily_recover.ps1`
+
 ## 适用范围
 
 这份清单只针对当前这条候选分支：

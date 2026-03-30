@@ -18,6 +18,22 @@
 - `http://<VPS-IP>/`
 - `http://<VPS-IP>/health`
 
+## 最短入口
+
+如果你不想记太多命令，先只记住这两个：
+
+日常巡检：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check.ps1 .env.mt5.local
+```
+
+页面异常时恢复：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_recover.ps1 .env.mt5.local
+```
+
 ## 你每天最常用的 4 件事
 
 ### 1. 打开监控页
@@ -38,7 +54,7 @@
 在 VPS 仓库目录执行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_task_status.ps1 .env.mt5.local -TailLog
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check.ps1 .env.mt5.local
 ```
 
 重点看：
@@ -52,7 +68,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_task_sta
 ### 3. 看监控页服务是否正常
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_task_status.ps1 .env.mt5.local -TailLog
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check.ps1 .env.mt5.local
 ```
 
 重点看：
@@ -65,7 +81,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitori
 ### 4. 页面打不开时直接恢复
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_recover.ps1 .env.mt5.local
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_recover.ps1 .env.mt5.local
 ```
 
 这条命令会直接：
@@ -100,6 +116,18 @@ cd /d C:\work\xauusd-ai-trading-system
 git pull
 ```
 
+一键日常巡检：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check.ps1 .env.mt5.local
+```
+
+一键监控恢复：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_recover.ps1 .env.mt5.local
+```
+
 检查主任务：
 
 ```powershell
@@ -115,7 +143,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitori
 恢复监控页：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_recover.ps1 .env.mt5.local
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_recover.ps1 .env.mt5.local
 ```
 
 重建监控自启任务：
@@ -143,7 +171,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_register
 先做：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_recover.ps1 .env.mt5.local
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_recover.ps1 .env.mt5.local
 ```
 
 再看：
