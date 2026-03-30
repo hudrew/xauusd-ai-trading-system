@@ -46,6 +46,26 @@ function Remove-ExpiredTaskLogs {
     }
 }
 
+function Append-LogFileContents {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourcePath,
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationPath
+    )
+
+    if (-not (Test-Path $SourcePath)) {
+        return
+    }
+
+    $sourceItem = Get-Item -Path $SourcePath -ErrorAction SilentlyContinue
+    if ($null -eq $sourceItem -or $sourceItem.Length -le 0) {
+        return
+    }
+
+    Get-Content -Path $SourcePath | Add-Content -Path $DestinationPath
+}
+
 Ensure-Venv
 
 $resolvedEnvFile = if ($EnvFile) {
@@ -72,24 +92,56 @@ $logFileName = "run_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss_fff")
 $logPath = Join-Path $resolvedLogDir $logFileName
 $exitCode = 0
 $failureMessage = $null
+$stdoutPath = [System.IO.Path]::GetTempFileName()
+$stderrPath = [System.IO.Path]::GetTempFileName()
+$powershellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 
 Write-TaskRunnerLogLine -LogPath $logPath -Message ("task_runner_started mode={0} env_file={1} config_path={2} loop_script={3}" -f $Mode, $resolvedEnvFile, $resolvedConfigPath, $loopScriptPath)
 
 Push-Location $Script:RootDir
 try {
-    $global:LASTEXITCODE = 0
-    & $loopScriptPath -EnvFile $resolvedEnvFile -ConfigPath $resolvedConfigPath @CliArgs *>> $logPath
-    if ($LASTEXITCODE -is [int] -and $LASTEXITCODE -ne 0) {
-        $exitCode = $LASTEXITCODE
+    $processArguments = @(
+        "-NoProfile"
+        "-ExecutionPolicy"
+        "Bypass"
+        "-File"
+        $loopScriptPath
+        "-EnvFile"
+        $resolvedEnvFile
+        "-ConfigPath"
+        $resolvedConfigPath
+    )
+    if ($CliArgs) {
+        $processArguments += $CliArgs
+    }
+
+    $process = Start-Process `
+        -FilePath $powershellExe `
+        -ArgumentList $processArguments `
+        -WorkingDirectory $Script:RootDir `
+        -Wait `
+        -PassThru `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput $stdoutPath `
+        -RedirectStandardError $stderrPath
+
+    Append-LogFileContents -SourcePath $stdoutPath -DestinationPath $logPath
+    Append-LogFileContents -SourcePath $stderrPath -DestinationPath $logPath
+
+    if ($process.ExitCode -ne 0) {
+        $exitCode = $process.ExitCode
+        $failureMessage = "Loop script exited with code $exitCode"
+        Write-TaskRunnerLogLine -LogPath $logPath -Message ("task_runner_failed mode={0} error={1}" -f $Mode, $failureMessage)
     }
 }
 catch {
-    $exitCode = if ($LASTEXITCODE -is [int] -and $LASTEXITCODE -ne 0) { $LASTEXITCODE } else { 1 }
+    $exitCode = 1
     $failureMessage = $_.Exception.Message
     Write-TaskRunnerLogLine -LogPath $logPath -Message ("task_runner_failed mode={0} error={1}" -f $Mode, $failureMessage)
 }
 finally {
     Pop-Location
+    Remove-Item -Path $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
     Write-TaskRunnerLogLine -LogPath $logPath -Message ("task_runner_finished mode={0} exit_code={1}" -f $Mode, $exitCode)
     Remove-ExpiredTaskLogs -DirectoryPath $resolvedLogDir -KeepFiles $KeepFiles
 }
