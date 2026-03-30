@@ -56,6 +56,9 @@ class MeanReversionStrategyConfig:
     stop_loss_atr_multiplier: float = 1.10
     take_profit_rr: float = 1.50
     midline_target_weight: float = 1.00
+    require_m1_reversal_confirmation: bool = False
+    max_breakout_distance_atr: float = 0.0
+    max_price_distance_to_ema20_atr: float = 0.0
     max_hold_bars: int = 12
 
 
@@ -64,6 +67,17 @@ class PullbackStrategyConfig:
     stop_loss_atr_multiplier: float = 1.15
     take_profit_rr: float = 1.80
     max_reference_distance_atr: float = 1.25
+    max_directional_extension_atr: float = 0.0
+    min_directional_distance_to_ema20_atr: float = 0.0
+    min_pullback_depth: float = 0.0
+    min_atr_m1: float = 0.0
+    min_atr_m5: float = 0.0
+    min_volatility_ratio: float = 0.0
+    allowed_sides: tuple[str, ...] = ()
+    min_entry_hour: int | None = None
+    max_entry_hour: int | None = None
+    edge_position_threshold: float = 0.80
+    required_state_reasons: tuple[str, ...] = ()
     require_m1_reversal_confirmation: bool = True
     max_hold_bars: int = 16
 
@@ -94,9 +108,14 @@ class RoutingConfig:
 @dataclass
 class BacktestConfig:
     initial_cash: float = 10_000.0
-    commission: float = 0.0
-    slippage_perc: float = 0.0
+    commission: float = 0.00035
+    slippage_perc: float = 0.00008
     slippage_fixed: float = 0.0
+    fill_delay_bars: int = 1
+    stop_loss_slippage_perc: float = 0.00015
+    take_profit_slippage_perc: float = 0.00005
+    timed_exit_slippage_perc: float = 0.00012
+    reset_consecutive_losses_on_session_change: bool = True
 
 
 @dataclass

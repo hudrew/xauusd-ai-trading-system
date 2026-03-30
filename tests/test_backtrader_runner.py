@@ -16,7 +16,10 @@ except ImportError:
     run_backtrader_csv = None
     SystemConfig = None
 else:
-    from xauusd_ai_system.backtest.backtrader_runner import run_backtrader_csv
+    from xauusd_ai_system.backtest.backtrader_runner import (
+        run_backtrader_csv,
+        run_backtrader_market_data,
+    )
     from xauusd_ai_system.config.schema import SystemConfig
 
 
@@ -38,6 +41,11 @@ class BacktraderRunnerTests(unittest.TestCase):
                 "volume": 1.0,
                 "session_tag": "eu",
                 "news_flag": False,
+                "news_level": "none",
+                "minutes_to_event": None,
+                "minutes_from_event": None,
+                "event_category": "",
+                "event_source": "",
             }
         )
 
@@ -80,6 +88,10 @@ class BacktraderRunnerTests(unittest.TestCase):
         self.assertEqual(session_trade_total, report.closed_trades)
         self.assertIn("performance_by_close_month", report.trade_segmentation.as_dict())
         self.assertIn("decision_summary", report.as_dict())
+        self.assertIn("trade_audit", report.as_dict())
+        self.assertEqual(report.trade_audit.records_count, report.closed_trades)
+        if report.closed_trades > 0:
+            self.assertGreater(len(report.trade_audit.latest_closed), 0)
 
     def test_cost_parameters_reduce_final_value(self) -> None:
         frame = self._build_history_frame()
@@ -116,6 +128,26 @@ class BacktraderRunnerTests(unittest.TestCase):
                     slippage_perc=0.0001,
                     slippage_fixed=0.10,
                 )
+
+    def test_run_backtrader_market_data_accepts_offset_aware_evaluation_window(self) -> None:
+        frame = self._build_history_frame()
+        frame["timestamp"] = pd.date_range(
+            "2026-03-29 09:00:00+00:00",
+            periods=len(frame),
+            freq="min",
+            tz="UTC",
+        )
+
+        report = run_backtrader_market_data(
+            frame,
+            SystemConfig(),
+            evaluation_start=frame.iloc[180]["timestamp"],
+            evaluation_end=frame.iloc[239]["timestamp"],
+        )
+
+        self.assertGreater(report.final_value, 0.0)
+        self.assertLessEqual(report.decision_summary.rows_processed, 60)
+        self.assertGreater(report.decision_summary.rows_processed, 0)
 
 
 if __name__ == "__main__":

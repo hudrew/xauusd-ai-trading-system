@@ -23,17 +23,43 @@ load_env_file() {
   fi
 }
 
+resolve_absolute_project_path() {
+  local path_value="$1"
+  if [[ "${path_value}" = /* ]]; then
+    echo "${path_value}"
+    return
+  fi
+  echo "${ROOT_DIR}/${path_value}"
+}
+
 run_cli() {
   local config_path="$1"
   shift
   PYTHONPATH="${ROOT_DIR}/src" "${VENV_PYTHON}" -m xauusd_ai_system.cli --config "${config_path}" "$@"
 }
 
-resolve_mt5_config() {
-  local env_name="${XAUUSD_AI_ENV:-paper}"
-  if [[ "${env_name}" == "prod" ]]; then
+default_mt5_config_path_for_mode() {
+  local mode="${1:-${XAUUSD_AI_ENV:-paper}}"
+  if [[ "${mode}" == "prod" ]]; then
     echo "${ROOT_DIR}/configs/mt5_prod.yaml"
     return
   fi
   echo "${ROOT_DIR}/configs/mt5_paper.yaml"
+}
+
+resolve_mt5_config() {
+  local config_path="${1:-${XAUUSD_AI_CONFIG_PATH:-}}"
+  local mode="${2:-${XAUUSD_AI_ENV:-paper}}"
+  if [[ -z "${config_path}" ]]; then
+    config_path="$(default_mt5_config_path_for_mode "${mode}")"
+  else
+    config_path="$(resolve_absolute_project_path "${config_path}")"
+  fi
+
+  if [[ ! -f "${config_path}" ]]; then
+    echo "MT5 config not found: ${config_path}" >&2
+    exit 1
+  fi
+
+  echo "${config_path}"
 }

@@ -29,6 +29,17 @@ class MeanReversionStrategy(Strategy):
         if side is None:
             return None
 
+        if self.config.require_m1_reversal_confirmation and not bool(
+            snapshot.feature("m1_reversal_confirmed", False)
+        ):
+            return None
+
+        if self._breakout_too_extended(snapshot):
+            return None
+
+        if self._mean_reversion_entry_too_stretched(snapshot):
+            return None
+
         stop_distance = self._stop_distance(snapshot)
         if stop_distance <= 0:
             return None
@@ -73,10 +84,33 @@ class MeanReversionStrategy(Strategy):
             return TradeSide.SELL
         return None
 
+    def _breakout_too_extended(self, snapshot: MarketSnapshot) -> bool:
+        max_breakout_distance_atr = float(self.config.max_breakout_distance_atr)
+        if max_breakout_distance_atr <= 0:
+            return False
+
+        atr_reference = abs(float(snapshot.feature("atr_m1_14", 0.0)))
+        if atr_reference <= 0:
+            return False
+
+        breakout_distance = abs(float(snapshot.feature("breakout_distance", 0.0)))
+        return breakout_distance > atr_reference * max_breakout_distance_atr
+
+    def _mean_reversion_entry_too_stretched(self, snapshot: MarketSnapshot) -> bool:
+        max_price_distance_atr = float(self.config.max_price_distance_to_ema20_atr)
+        if max_price_distance_atr <= 0:
+            return False
+
+        atr_reference = abs(float(snapshot.feature("atr_m1_14", 0.0)))
+        if atr_reference <= 0:
+            return False
+
+        distance_to_ema = abs(float(snapshot.feature("price_distance_to_ema20", 0.0)))
+        return distance_to_ema > atr_reference * max_price_distance_atr
+
     def _stop_distance(self, snapshot: MarketSnapshot) -> float:
         atr_distance = abs(float(snapshot.feature("atr_m1_14", 0.0))) * float(
             self.config.stop_loss_atr_multiplier
         )
         boundary_buffer = abs(float(snapshot.feature("range_boundary_buffer", 0.0)))
         return max(atr_distance, boundary_buffer)
-

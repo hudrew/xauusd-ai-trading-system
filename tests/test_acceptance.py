@@ -320,6 +320,7 @@ def _make_trade_segmentation(
             for key, value in session_segments.items()
         },
         performance_by_side={"buy": _make_trade_segment(sum(month_segments.values()))},
+        performance_by_exit_reason={"take_profit": _make_trade_segment(sum(month_segments.values()))},
     )
 
 

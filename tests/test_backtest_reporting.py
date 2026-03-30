@@ -20,6 +20,8 @@ class TradePerformanceCollectorTests(unittest.TestCase):
                 "state_label": "trend_breakout",
                 "session_tag": "eu",
                 "side": "buy",
+                "exit_reason": "take_profit",
+                "exit_price": 3012.5,
             },
             close_timestamp=datetime(2026, 3, 29, 10, 0),
             net_pnl=120.0,
@@ -33,6 +35,8 @@ class TradePerformanceCollectorTests(unittest.TestCase):
                 "state_label": "pullback_continuation",
                 "session_tag": "us",
                 "side": "sell",
+                "exit_reason": "max_hold_timeout",
+                "exit_price": 2998.2,
             },
             close_timestamp=datetime(2026, 4, 2, 16, 0),
             net_pnl=-45.0,
@@ -65,9 +69,29 @@ class TradePerformanceCollectorTests(unittest.TestCase):
         )
         self.assertEqual(summary.performance_by_side["sell"].gross_loss, 45.0)
         self.assertEqual(
+            summary.performance_by_exit_reason["take_profit"].closed_trades,
+            1,
+        )
+        self.assertEqual(
+            summary.performance_by_exit_reason["max_hold_timeout"].lost_trades,
+            1,
+        )
+        self.assertEqual(
             summary.as_dict()["performance_by_strategy"]["pullback"]["commission_paid"],
             2.5,
         )
+
+        audit = collector.build_audit_summary(limit=2)
+
+        self.assertEqual(audit.records_count, 2)
+        self.assertEqual(audit.worst_losses[0].strategy_name, "pullback")
+        self.assertEqual(audit.best_wins[0].strategy_name, "breakout")
+        self.assertEqual(audit.latest_closed[0].close_month, "2026-04")
+        self.assertEqual(audit.latest_closed[0].outcome, "loss")
+        self.assertEqual(audit.latest_closed[0].exit_reason, "max_hold_timeout")
+        self.assertEqual(audit.best_wins[0].exit_reason, "take_profit")
+        self.assertEqual(audit.best_wins[0].exit_price, 3012.5)
+        self.assertEqual(len(audit.all_closed), 2)
 
 
 if __name__ == "__main__":

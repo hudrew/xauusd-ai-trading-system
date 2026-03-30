@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Mapping
 
@@ -209,6 +209,7 @@ class TradeSegmentationSummary:
     performance_by_state: dict[str, TradeSegmentSummary]
     performance_by_session: dict[str, TradeSegmentSummary]
     performance_by_side: dict[str, TradeSegmentSummary]
+    performance_by_exit_reason: dict[str, TradeSegmentSummary]
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -232,6 +233,90 @@ class TradeSegmentationSummary:
                 key: summary.as_dict()
                 for key, summary in self.performance_by_side.items()
             },
+            "performance_by_exit_reason": {
+                key: summary.as_dict()
+                for key, summary in self.performance_by_exit_reason.items()
+            },
+        }
+
+
+@dataclass
+class TradeAuditRecord:
+    entry_timestamp: str
+    close_timestamp: str
+    entry_month: str
+    close_month: str
+    session_tag: str
+    strategy_name: str
+    state_label: str
+    side: str
+    volatility_level: str
+    state_reason_codes: list[str] = field(default_factory=list)
+    signal_reason: list[str] = field(default_factory=list)
+    risk_advisory: list[str] = field(default_factory=list)
+    entry_price: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
+    position_size: float | None = None
+    position_scale: float | None = None
+    state_confidence_score: float | None = None
+    volatility_risk_score: float | None = None
+    net_pnl: float = 0.0
+    commission_paid: float = 0.0
+    hold_bars: int = 0
+    hold_minutes: float = 0.0
+    outcome: str = "flat"
+    exit_reason: str = "unknown"
+    exit_price: float | None = None
+    entry_features: dict[str, Any] = field(default_factory=dict)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "entry_timestamp": self.entry_timestamp,
+            "close_timestamp": self.close_timestamp,
+            "entry_month": self.entry_month,
+            "close_month": self.close_month,
+            "session_tag": self.session_tag,
+            "strategy_name": self.strategy_name,
+            "state_label": self.state_label,
+            "side": self.side,
+            "volatility_level": self.volatility_level,
+            "state_reason_codes": list(self.state_reason_codes),
+            "signal_reason": list(self.signal_reason),
+            "risk_advisory": list(self.risk_advisory),
+            "entry_price": self.entry_price,
+            "stop_loss": self.stop_loss,
+            "take_profit": self.take_profit,
+            "position_size": self.position_size,
+            "position_scale": self.position_scale,
+            "state_confidence_score": self.state_confidence_score,
+            "volatility_risk_score": self.volatility_risk_score,
+            "net_pnl": self.net_pnl,
+            "commission_paid": self.commission_paid,
+            "hold_bars": self.hold_bars,
+            "hold_minutes": self.hold_minutes,
+            "outcome": self.outcome,
+            "exit_reason": self.exit_reason,
+            "exit_price": self.exit_price,
+            "entry_features": dict(self.entry_features),
+        }
+
+
+@dataclass
+class TradeAuditSummary:
+    records_count: int = 0
+    latest_closed: list[TradeAuditRecord] = field(default_factory=list)
+    worst_losses: list[TradeAuditRecord] = field(default_factory=list)
+    best_wins: list[TradeAuditRecord] = field(default_factory=list)
+    all_closed: list[TradeAuditRecord] = field(default_factory=list)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "records_count": self.records_count,
+            "latest_closed": [record.as_dict() for record in self.latest_closed],
+            "worst_losses": [record.as_dict() for record in self.worst_losses],
+            "best_wins": [record.as_dict() for record in self.best_wins],
+            "all_closed": [record.as_dict() for record in self.all_closed],
         }
 
 
@@ -280,6 +365,8 @@ class TradePerformanceCollector:
         self.by_state: dict[str, _TradeBucket] = defaultdict(_TradeBucket)
         self.by_session: dict[str, _TradeBucket] = defaultdict(_TradeBucket)
         self.by_side: dict[str, _TradeBucket] = defaultdict(_TradeBucket)
+        self.by_exit_reason: dict[str, _TradeBucket] = defaultdict(_TradeBucket)
+        self.trade_records: list[TradeAuditRecord] = []
 
     def record(
         self,
@@ -296,6 +383,7 @@ class TradePerformanceCollector:
         state_label = str(trade_context.get("state_label", "unknown") or "unknown")
         session_tag = str(trade_context.get("session_tag", "unknown") or "unknown")
         side = str(trade_context.get("side", "unknown") or "unknown")
+        exit_reason = str(trade_context.get("exit_reason", "unknown") or "unknown")
 
         payload = {
             "net_pnl": float(net_pnl),
@@ -308,6 +396,60 @@ class TradePerformanceCollector:
         self.by_state[state_label].record(**payload)
         self.by_session[session_tag].record(**payload)
         self.by_side[side].record(**payload)
+        self.by_exit_reason[exit_reason].record(**payload)
+        self.trade_records.append(
+            TradeAuditRecord(
+                entry_timestamp=str(
+                    trade_context.get("entry_timestamp", close_timestamp.isoformat())
+                ),
+                close_timestamp=close_timestamp.isoformat(),
+                entry_month=str(
+                    trade_context.get("entry_month", close_timestamp.strftime("%Y-%m"))
+                ),
+                close_month=close_month,
+                session_tag=session_tag,
+                strategy_name=strategy_name,
+                state_label=state_label,
+                side=side,
+                volatility_level=str(
+                    trade_context.get("volatility_level", "unavailable") or "unavailable"
+                ),
+                state_reason_codes=[
+                    str(item)
+                    for item in trade_context.get("state_reason_codes", []) or []
+                ],
+                signal_reason=[
+                    str(item) for item in trade_context.get("signal_reason", []) or []
+                ],
+                risk_advisory=[
+                    str(item) for item in trade_context.get("risk_advisory", []) or []
+                ],
+                entry_price=_optional_float(trade_context.get("entry_price")),
+                stop_loss=_optional_float(trade_context.get("stop_loss")),
+                take_profit=_optional_float(trade_context.get("take_profit")),
+                position_size=_optional_float(trade_context.get("position_size")),
+                position_scale=_optional_float(trade_context.get("position_scale")),
+                state_confidence_score=_optional_float(
+                    trade_context.get("state_confidence_score")
+                ),
+                volatility_risk_score=_optional_float(
+                    trade_context.get("volatility_risk_score")
+                ),
+                net_pnl=round(float(net_pnl), 4),
+                commission_paid=round(float(commission_paid), 4),
+                hold_bars=int(hold_bars),
+                hold_minutes=round(float(hold_minutes), 2),
+                outcome=_trade_outcome(net_pnl),
+                exit_reason=str(trade_context.get("exit_reason", "unknown") or "unknown"),
+                exit_price=_optional_float(trade_context.get("exit_price")),
+                entry_features={
+                    str(key): value
+                    for key, value in (
+                        trade_context.get("entry_features", {}) or {}
+                    ).items()
+                },
+            )
+        )
 
     def build_summary(self) -> TradeSegmentationSummary:
         return TradeSegmentationSummary(
@@ -316,6 +458,26 @@ class TradePerformanceCollector:
             performance_by_state=self._build_bucket_map(self.by_state),
             performance_by_session=self._build_bucket_map(self.by_session),
             performance_by_side=self._build_bucket_map(self.by_side),
+            performance_by_exit_reason=self._build_bucket_map(self.by_exit_reason),
+        )
+
+    def build_audit_summary(self, *, limit: int = 5) -> TradeAuditSummary:
+        latest_closed = list(reversed(self.trade_records[-limit:]))
+        worst_losses = sorted(
+            (record for record in self.trade_records if record.net_pnl < 0),
+            key=lambda item: item.net_pnl,
+        )[:limit]
+        best_wins = sorted(
+            (record for record in self.trade_records if record.net_pnl > 0),
+            key=lambda item: item.net_pnl,
+            reverse=True,
+        )[:limit]
+        return TradeAuditSummary(
+            records_count=len(self.trade_records),
+            latest_closed=latest_closed,
+            worst_losses=worst_losses,
+            best_wins=best_wins,
+            all_closed=list(self.trade_records),
         )
 
     def _build_bucket_map(
@@ -375,3 +537,17 @@ def _round_optional(value: float | None) -> float | None:
     if value is None:
         return None
     return round(value, 4)
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    return round(float(value), 4)
+
+
+def _trade_outcome(net_pnl: float) -> str:
+    if net_pnl > 0:
+        return "win"
+    if net_pnl < 0:
+        return "loss"
+    return "flat"

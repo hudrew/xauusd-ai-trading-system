@@ -57,20 +57,77 @@ function Load-EnvFile {
     }
 }
 
-function Resolve-Mt5Config {
-    $envName = $env:XAUUSD_AI_ENV
-    if ($envName -eq "prod") {
+function Get-DefaultMt5ConfigPath {
+    param(
+        [ValidateSet("paper", "prod")]
+        [string]$Mode = $(if ($env:XAUUSD_AI_ENV -eq "prod") { "prod" } else { "paper" })
+    )
+
+    if ($Mode -eq "prod") {
         return (Join-Path $Script:RootDir "configs\mt5_prod.yaml")
     }
 
     return (Join-Path $Script:RootDir "configs\mt5_paper.yaml")
 }
 
+function Resolve-Mt5Config {
+    param(
+        [string]$ConfigPath,
+        [ValidateSet("paper", "prod")]
+        [string]$Mode = $(if ($env:XAUUSD_AI_ENV -eq "prod") { "prod" } else { "paper" })
+    )
+
+    $candidatePath = if ($ConfigPath) {
+        $ConfigPath
+    }
+    elseif ($env:XAUUSD_AI_CONFIG_PATH) {
+        $env:XAUUSD_AI_CONFIG_PATH
+    }
+    else {
+        Get-DefaultMt5ConfigPath -Mode $Mode
+    }
+
+    $resolvedPath = Resolve-AbsoluteProjectPath -PathValue $candidatePath
+    if (-not (Test-Path $resolvedPath)) {
+        throw "MT5 config not found: $resolvedPath"
+    }
+
+    return $resolvedPath
+}
+
+function Get-Mt5ConfigSlug {
+    param(
+        [ValidateSet("paper", "prod")]
+        [string]$Mode,
+        [string]$ConfigPath
+    )
+
+    $resolvedConfigPath = Resolve-Mt5Config -Mode $Mode -ConfigPath $ConfigPath
+    $defaultConfigPath = Resolve-AbsoluteProjectPath -PathValue (Get-DefaultMt5ConfigPath -Mode $Mode)
+    if ([string]::Equals($resolvedConfigPath, $defaultConfigPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $null
+    }
+
+    $slug = [System.IO.Path]::GetFileNameWithoutExtension($resolvedConfigPath).ToLowerInvariant()
+    $slug = [regex]::Replace($slug, "[^a-z0-9]+", "-").Trim("-")
+    if ([string]::IsNullOrWhiteSpace($slug)) {
+        return "custom"
+    }
+
+    return $slug
+}
+
 function Get-DefaultMt5TaskName {
     param(
         [ValidateSet("paper", "prod")]
-        [string]$Mode
+        [string]$Mode,
+        [string]$ConfigPath
     )
+
+    $configSlug = Get-Mt5ConfigSlug -Mode $Mode -ConfigPath $ConfigPath
+    if ($configSlug) {
+        return "xauusd-ai-$Mode-$configSlug-loop"
+    }
 
     return "xauusd-ai-$Mode-loop"
 }
@@ -78,8 +135,14 @@ function Get-DefaultMt5TaskName {
 function Get-DefaultMt5TaskLogDir {
     param(
         [ValidateSet("paper", "prod")]
-        [string]$Mode
+        [string]$Mode,
+        [string]$ConfigPath
     )
+
+    $configSlug = Get-Mt5ConfigSlug -Mode $Mode -ConfigPath $ConfigPath
+    if ($configSlug) {
+        return (Join-Path $Script:RootDir "var\xauusd_ai\task_logs\$Mode\$configSlug")
+    }
 
     return (Join-Path $Script:RootDir "var\xauusd_ai\task_logs\$Mode")
 }

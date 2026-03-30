@@ -123,6 +123,33 @@ flowchart LR
 - `breakout` 当前弱于 `pullback`
 - 如果直接切成“只做 us”，会和现有 `session_profit_concentration` 验收规则冲突
 
+### 5.1 自动切换和人工迭代的边界
+
+当前系统已经支持：
+
+- 盘中自动识别市场状态
+- 在已内置的策略之间自动切换
+- 按时段和策略开关自动做准入过滤
+
+但当前系统不会自动做这些事情：
+
+- 自动改核心代码
+- 自动发明新策略
+- 自动重写参数体系
+- 自动放宽风控或验收门槛
+
+更准确地说，当前是：
+
+- “盘中自动切换内置策略”
+- “盘后人工根据研究结果迭代代码和配置”
+
+这样做的原因是：
+
+- 生产环境更可控
+- 每次改动都可回测
+- 每次放行都可审计
+- 出问题时更容易定位是“策略问题”还是“行情变化”
+
 ### 6. 风控审核
 
 风控是最终关口。
@@ -201,6 +228,10 @@ flowchart LR
 - `trade_segmentation.performance_by_strategy`
 - `trade_segmentation.performance_by_state`
 - `trade_segmentation.performance_by_session`
+- `trade_audit.records_count`
+- `trade_audit.latest_closed`
+- `trade_audit.worst_losses`
+- `trade_audit.best_wins`
 
 当前正式研究验收链已经进一步补上：
 

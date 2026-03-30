@@ -1,6 +1,8 @@
 param(
+    [Parameter(Position = 0)]
     [string]$EnvFile,
-    [Parameter(ValueFromRemainingArguments = $true)]
+    [string]$ConfigPath,
+    [Parameter(Position = 1, ValueFromRemainingArguments = $true)]
     [string[]]$CliArgs
 )
 
@@ -11,5 +13,5 @@ $ErrorActionPreference = "Stop"
 
 Ensure-Venv
 Load-EnvFile -EnvFile $(if ($EnvFile) { $EnvFile } else { $Script:DefaultEnvFile })
-$configPath = Join-Path $Script:RootDir "configs\mt5_paper.yaml"
+$configPath = Resolve-Mt5Config -Mode "paper" -ConfigPath $ConfigPath
 Invoke-Mt5Cli -ConfigPath $configPath -Arguments (@("live-loop", "--require-deploy-gate", "--require-preflight") + $CliArgs)

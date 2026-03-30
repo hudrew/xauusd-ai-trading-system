@@ -14,6 +14,17 @@ from xauusd_ai_system.config.schema import load_system_config
 
 
 class ConfigSchemaEnvOverrideTests(unittest.TestCase):
+    def test_default_research_backtest_config_is_conservative(self) -> None:
+        config = load_system_config()
+
+        self.assertGreater(config.backtest.commission, 0.0)
+        self.assertGreater(config.backtest.slippage_perc, 0.0)
+        self.assertGreaterEqual(config.backtest.fill_delay_bars, 1)
+        self.assertGreater(config.backtest.stop_loss_slippage_perc, 0.0)
+        self.assertGreater(config.backtest.take_profit_slippage_perc, 0.0)
+        self.assertGreater(config.backtest.timed_exit_slippage_perc, 0.0)
+        self.assertTrue(config.backtest.reset_consecutive_losses_on_session_change)
+
     def test_runtime_tuning_overrides_apply_from_environment(self) -> None:
         env = {
             "XAUUSD_AI_MT5_DEVIATION": "35",

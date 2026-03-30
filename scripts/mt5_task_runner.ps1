@@ -2,6 +2,7 @@ param(
     [ValidateSet("paper", "prod")]
     [string]$Mode = $(if ($env:XAUUSD_AI_ENV -eq "prod") { "prod" } else { "paper" }),
     [string]$EnvFile,
+    [string]$ConfigPath,
     [string]$LogDir,
     [int]$KeepFiles = 20,
     [Parameter(ValueFromRemainingArguments = $true)]
@@ -58,7 +59,9 @@ if (-not (Test-Path $resolvedEnvFile)) {
     throw "Env file not found: $resolvedEnvFile"
 }
 
-$resolvedLogDir = Ensure-Directory -PathValue $(if ($LogDir) { $LogDir } else { Get-DefaultMt5TaskLogDir -Mode $Mode })
+Load-EnvFile -EnvFile $resolvedEnvFile
+$resolvedConfigPath = Resolve-Mt5Config -Mode $Mode -ConfigPath $ConfigPath
+$resolvedLogDir = Ensure-Directory -PathValue $(if ($LogDir) { $LogDir } else { Get-DefaultMt5TaskLogDir -Mode $Mode -ConfigPath $resolvedConfigPath })
 $loopScriptName = if ($Mode -eq "prod") { "mt5_prod_loop.ps1" } else { "mt5_paper_loop.ps1" }
 $loopScriptPath = Join-Path $PSScriptRoot $loopScriptName
 if (-not (Test-Path $loopScriptPath)) {
@@ -70,12 +73,12 @@ $logPath = Join-Path $resolvedLogDir $logFileName
 $exitCode = 0
 $failureMessage = $null
 
-Write-TaskRunnerLogLine -LogPath $logPath -Message ("task_runner_started mode={0} env_file={1} loop_script={2}" -f $Mode, $resolvedEnvFile, $loopScriptPath)
+Write-TaskRunnerLogLine -LogPath $logPath -Message ("task_runner_started mode={0} env_file={1} config_path={2} loop_script={3}" -f $Mode, $resolvedEnvFile, $resolvedConfigPath, $loopScriptPath)
 
 Push-Location $Script:RootDir
 try {
     $global:LASTEXITCODE = 0
-    & $loopScriptPath $resolvedEnvFile @CliArgs *>> $logPath
+    & $loopScriptPath -EnvFile $resolvedEnvFile -ConfigPath $resolvedConfigPath @CliArgs *>> $logPath
     if ($LASTEXITCODE -is [int] -and $LASTEXITCODE -ne 0) {
         $exitCode = $LASTEXITCODE
     }
@@ -95,6 +98,7 @@ if ($failureMessage) {
     Write-Host "Task runner failed." -ForegroundColor Red
     Write-Host "Mode: $Mode"
     Write-Host "EnvFile: $resolvedEnvFile"
+    Write-Host "ConfigPath: $resolvedConfigPath"
     Write-Host "LogFile: $logPath"
     Write-Host "Error: $failureMessage"
 }

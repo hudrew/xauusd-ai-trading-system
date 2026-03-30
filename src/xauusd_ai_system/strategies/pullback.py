@@ -24,12 +24,24 @@ class PullbackStrategy(Strategy):
         if side is None:
             return None
 
+        if not self._side_allowed(side):
+            return None
+
+        if not self._entry_hour_allowed(snapshot):
+            return None
+
+        if not self._required_state_reasons_present(state_decision):
+            return None
+
         if self.config.require_m1_reversal_confirmation and not bool(
             snapshot.feature("m1_reversal_confirmed", False)
         ):
             return None
 
-        if self._pullback_too_extended(snapshot):
+        if self._below_minimum_entry_quality(snapshot, side):
+            return None
+
+        if self._pullback_too_extended(snapshot, side):
             return None
 
         stop_distance = self._stop_distance(snapshot)
@@ -61,13 +73,119 @@ class PullbackStrategy(Strategy):
             take_profit=take_profit,
             signal_reason=[
                 "STATE_PULLBACK_CONTINUATION",
-                "M1_REVERSAL_CONFIRMED",
-                "VALUE_AREA_RETEST",
+                *self._signal_reasons(state_decision),
             ],
             metadata={"max_hold_bars": self.config.max_hold_bars},
         )
 
-    def _pullback_too_extended(self, snapshot: MarketSnapshot) -> bool:
+    def _required_state_reasons_present(self, state_decision: StateDecision) -> bool:
+        required = {
+            str(reason).strip().upper()
+            for reason in self.config.required_state_reasons
+            if str(reason).strip()
+        }
+        if not required:
+            return True
+
+        available = {
+            str(reason).strip().upper()
+            for reason in state_decision.reason_codes
+            if str(reason).strip()
+        }
+        return required.issubset(available)
+
+    def _side_allowed(self, side: TradeSide) -> bool:
+        allowed = {
+            str(value).strip().lower()
+            for value in self.config.allowed_sides
+            if str(value).strip()
+        }
+        if not allowed:
+            return True
+        return side.value.lower() in allowed
+
+    def _entry_hour_allowed(self, snapshot: MarketSnapshot) -> bool:
+        min_entry_hour = self.config.min_entry_hour
+        max_entry_hour = self.config.max_entry_hour
+        if min_entry_hour is None and max_entry_hour is None:
+            return True
+
+        hour = int(snapshot.timestamp.hour)
+        if min_entry_hour is not None and hour < int(min_entry_hour):
+            return False
+        if max_entry_hour is not None and hour > int(max_entry_hour):
+            return False
+        return True
+
+    def _signal_reasons(self, state_decision: StateDecision) -> list[str]:
+        reasons: list[str] = []
+        if self.config.require_m1_reversal_confirmation:
+            reasons.append("M1_REVERSAL_CONFIRMED")
+        reasons.extend(
+            reason
+            for reason in self.config.required_state_reasons
+            if reason in state_decision.reason_codes and reason not in reasons
+        )
+        reasons.append("REFERENCE_DISTANCE_OK")
+        return reasons
+
+    def _pullback_too_extended(
+        self,
+        snapshot: MarketSnapshot,
+        side: TradeSide,
+    ) -> bool:
+        if self._reference_distance_too_large(snapshot):
+            return True
+        return self._directional_entry_too_stretched(snapshot, side)
+
+    def _below_minimum_entry_quality(
+        self,
+        snapshot: MarketSnapshot,
+        side: TradeSide,
+    ) -> bool:
+        if (
+            float(snapshot.feature("pullback_depth", 0.0))
+            < float(self.config.min_pullback_depth)
+        ):
+            return True
+
+        if abs(float(snapshot.feature("atr_m1_14", 0.0))) < float(self.config.min_atr_m1):
+            return True
+
+        if abs(float(snapshot.feature("atr_m5_14", 0.0))) < float(self.config.min_atr_m5):
+            return True
+
+        if (
+            float(snapshot.feature("volatility_ratio", 0.0))
+            < float(self.config.min_volatility_ratio)
+        ):
+            return True
+
+        return self._directional_distance_too_small(snapshot, side)
+
+    def _directional_distance_too_small(
+        self,
+        snapshot: MarketSnapshot,
+        side: TradeSide,
+    ) -> bool:
+        min_distance_atr = float(self.config.min_directional_distance_to_ema20_atr)
+        if min_distance_atr <= 0:
+            return False
+
+        atr_reference = max(
+            abs(float(snapshot.feature("atr_m5_14", 0.0))),
+            abs(float(snapshot.feature("atr_m1_14", 0.0))),
+        )
+        if atr_reference <= 0:
+            return False
+
+        min_distance = atr_reference * min_distance_atr
+        ema_distance = float(snapshot.feature("price_distance_to_ema20", 0.0))
+        if side == TradeSide.BUY:
+            return ema_distance < min_distance
+        return ema_distance > -min_distance
+
+    def _reference_distance_too_large(self, snapshot: MarketSnapshot) -> bool:
         atr_reference = max(
             abs(float(snapshot.feature("atr_m5_14", 0.0))),
             abs(float(snapshot.feature("atr_m1_14", 0.0))),
@@ -81,6 +199,44 @@ class PullbackStrategy(Strategy):
         ema_distance = abs(float(snapshot.feature("price_distance_to_ema20", 0.0)))
         vwap_distance = abs(float(snapshot.feature("vwap_deviation", 0.0)))
         return ema_distance > max_allowed_distance and vwap_distance > max_allowed_distance
+
+    def _directional_entry_too_stretched(
+        self,
+        snapshot: MarketSnapshot,
+        side: TradeSide,
+    ) -> bool:
+        directional_extension_atr = float(
+            self.config.max_directional_extension_atr
+        )
+        if directional_extension_atr <= 0:
+            return False
+
+        atr_reference = max(
+            abs(float(snapshot.feature("atr_m5_14", 0.0))),
+            abs(float(snapshot.feature("atr_m1_14", 0.0))),
+        )
+        if atr_reference <= 0:
+            return False
+
+        max_extension = atr_reference * directional_extension_atr
+        ema_distance = float(snapshot.feature("price_distance_to_ema20", 0.0))
+        vwap_distance = float(snapshot.feature("vwap_deviation", 0.0))
+        range_position = float(snapshot.feature("range_position", 0.5))
+        bollinger_position = float(snapshot.feature("bollinger_position", 0.5))
+        edge_threshold = float(self.config.edge_position_threshold)
+
+        if side == TradeSide.BUY:
+            return (
+                ema_distance > max_extension
+                and vwap_distance > max_extension
+                and max(range_position, bollinger_position) >= edge_threshold
+            )
+
+        return (
+            ema_distance < -max_extension
+            and vwap_distance < -max_extension
+            and min(range_position, bollinger_position) <= 1.0 - edge_threshold
+        )
 
     def _stop_distance(self, snapshot: MarketSnapshot) -> float:
         atr_distance = abs(float(snapshot.feature("atr_m1_14", 0.0))) * float(

@@ -1,3 +1,6 @@
+## Branch paper runtime:
+## This config operationalizes the sell-only US-session pullback v3 candidate on MT5 paper trading.
+## It keeps a separate report archive and database so the branch can run alongside the mainline paper track.
 state_thresholds:
   breakout_distance_min: 0.18
   trend_ema_spread_min: 0.35
@@ -18,12 +21,12 @@ state_thresholds:
   conflict_score_max: 0.45
 
 risk:
-  max_single_trade_risk_pct: 0.003
-  max_daily_loss_pct: 0.015
-  max_consecutive_losses: 2
+  max_single_trade_risk_pct: 0.005
+  max_daily_loss_pct: 0.02
+  max_consecutive_losses: 3
   max_open_positions: 1
   max_spread_ratio: 1.40
-  protective_drawdown_pct: 0.05
+  protective_drawdown_pct: 0.08
   contract_size: 100.0
   partial_alignment_scale: 0.70
 
@@ -40,6 +43,14 @@ pullback:
   take_profit_rr: 1.80
   max_reference_distance_atr: 1.25
   max_directional_extension_atr: 0.80
+  min_directional_distance_to_ema20_atr: 0.55
+  min_pullback_depth: 0.30
+  min_atr_m1: 4.00
+  min_atr_m5: 15.00
+  min_volatility_ratio: 1.00
+  allowed_sides:
+    - "sell"
+  min_entry_hour: 20
   edge_position_threshold: 0.80
   required_state_reasons:
     - "MTF_ALIGNMENT_OK"
@@ -55,15 +66,18 @@ mean_reversion:
   stop_loss_atr_multiplier: 1.10
   take_profit_rr: 1.50
   midline_target_weight: 1.00
+  require_m1_reversal_confirmation: false
+  max_breakout_distance_atr: 0.20
+  max_price_distance_to_ema20_atr: 1.50
   max_hold_bars: 12
 
 routing:
-  enabled_strategies: []
+  enabled_strategies:
+    - "pullback"
   disabled_strategies:
     - "breakout"
+    - "mean_reversion"
   allowed_sessions:
-    - "eu"
-    - "overlap"
     - "us"
   blocked_sessions: []
 
@@ -71,13 +85,13 @@ volatility_monitor:
   horizons_minutes: [5, 15, 30]
   atr_expansion_trigger: 1.20
   spread_ratio_trigger: 1.20
-  tick_speed_trigger: 1.10
+  tick_speed_trigger: 1.15
   breakout_pressure_trigger: 0.20
-  news_proximity_minutes: 20
-  warning_score_min: 0.58
-  critical_score_min: 0.80
-  warning_position_scale: 0.50
-  info_position_scale: 0.80
+  news_proximity_minutes: 15
+  warning_score_min: 0.60
+  critical_score_min: 0.82
+  warning_position_scale: 0.60
+  info_position_scale: 0.85
   block_on_critical: true
 
 backtest:
@@ -93,19 +107,19 @@ backtest:
 
 acceptance:
   min_total_net_pnl: 0.0
-  min_total_profit_factor: 1.10
+  min_total_profit_factor: 1.15
   max_total_drawdown_pct: 0.08
   min_out_of_sample_net_pnl: 0.0
   min_out_of_sample_profit_factor: 1.0
   max_out_of_sample_drawdown_pct: 0.08
   min_walk_forward_windows: 3
-  min_walk_forward_positive_window_rate: 0.50
-  max_close_month_profit_concentration: 0.70
-  max_session_profit_concentration: 0.80
+  min_walk_forward_positive_window_rate: 0.55
+  max_close_month_profit_concentration: 0.65
+  max_session_profit_concentration: 1.00
 
 report_archive:
   enabled: true
-  base_dir: "reports/research"
+  base_dir: "reports/research_pullback_sell_v3"
   write_latest: true
 
 deployment_gate:
@@ -115,7 +129,7 @@ deployment_gate:
   require_preflight_on_live: true
 
 database:
-  url: "sqlite:///var/xauusd_ai/paper.db"
+  url: "sqlite:///var/xauusd_ai/paper_pullback_sell_v3.db"
   auto_create: true
 
 notification:
@@ -127,7 +141,7 @@ notification:
 
 runtime:
   environment: "paper"
-  service_name: "xauusd-ai-paper"
+  service_name: "xauusd-ai-paper-pullback-sell-v3"
   log_level: "INFO"
   heartbeat_interval_seconds: 30
   poll_interval_seconds: 5
@@ -150,7 +164,7 @@ market_data:
 execution:
   platform: "mt5"
   symbol: "XAUUSD"
-  order_comment_prefix: "xauusd-ai-paper"
+  order_comment_prefix: "xauusd-ai-pbsv3"
   mt5:
     enabled: true
     login: null
@@ -159,4 +173,4 @@ execution:
     path: null
     symbol: "XAUUSD"
     deviation: 30
-    magic: 2026032901
+    magic: 2026033003

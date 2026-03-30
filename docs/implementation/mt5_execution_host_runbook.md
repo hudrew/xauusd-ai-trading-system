@@ -116,6 +116,7 @@ copy .env.mt5.example .env.mt5.local
 - `XAUUSD_AI_DISABLED_STRATEGIES`
 - `XAUUSD_AI_ALLOWED_SESSIONS`
 - `XAUUSD_AI_BLOCKED_SESSIONS`
+- `XAUUSD_AI_CONFIG_PATH`
 
 根据节点用途设置：
 
@@ -236,6 +237,28 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_export_history.ps1 .env.m
 
 当前 `configs/mt5_paper.yaml` 和 `configs/mt5_prod.yaml` 也已经同步为同样的 `routing` 默认值，避免研究口径和 live 口径漂移。
 
+如果当前要把通过 branch gate 的候选分支接到 MT5 纸交易链路，项目里现在已经补了一份独立运行配置：
+
+- `configs/mt5_paper_pullback_sell_v3.yaml`
+
+这份配置会保持：
+
+- 只运行 `pullback`
+- 只允许 `sell`
+- 只允许 `us`
+- 报告目录独立为 `reports/research_pullback_sell_v3`
+- 纸盘数据库独立为 `var/xauusd_ai/paper_pullback_sell_v3.db`
+
+这样主线 paper 和候选分支 paper 就可以并行运行，不会互相覆盖报告和审计数据。
+
+如果要让 helper scripts 默认切到这条候选线，有两种方式：
+
+- 直接在命令里显式增加 `-ConfigPath .\configs\mt5_paper_pullback_sell_v3.yaml`
+- 或在 `.env.mt5.local` 里增加：
+  - `XAUUSD_AI_CONFIG_PATH=configs/mt5_paper_pullback_sell_v3.yaml`
+
+更推荐第一种，因为它不会改变主线命令的默认行为。
+
 ### 研究验收归档导入
 
 如果研究回测不在这台 Windows 宿主机上执行，而是在本地研发机完成，先把研究报告导入当前宿主机：
@@ -251,6 +274,38 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_export_history.ps1 .env.m
 ```
 
 确认最新 `acceptance` 已存在、`ready=true`、`checked_at` 在允许时效内，再继续跑 `mt5_deploy_gate.ps1`。
+
+如果当前导入的是 `pullback sell v3` 候选分支的验收结果，要导入到它自己的独立目录：
+
+```powershell
+.venv\Scripts\python.exe -m xauusd_ai_system.cli report-import C:\work\incoming\acceptance_latest.json --report-dir reports\research_pullback_sell_v3
+```
+
+然后建议核对：
+
+```powershell
+.venv\Scripts\python.exe -m xauusd_ai_system.cli reports latest --report-dir reports\research_pullback_sell_v3
+```
+
+如果研究机和 Windows 宿主机是两台机器，推荐先在研究机导出一份可直接传输的最新归档：
+
+```bash
+./scripts/research_pullback_sell_v3_export_latest.sh
+```
+
+默认会生成：
+
+- `tmp/research_pullback_sell_v3_acceptance_latest.json`
+
+然后把这个文件传到 Windows 宿主机，例如：
+
+- `C:\work\incoming\research_pullback_sell_v3_acceptance_latest.json`
+
+再执行：
+
+```powershell
+.venv\Scripts\python.exe -m xauusd_ai_system.cli report-import C:\work\incoming\research_pullback_sell_v3_acceptance_latest.json --report-dir reports\research_pullback_sell_v3
+```
 
 ## 启动顺序
 
@@ -271,6 +326,36 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_deploy_gate.ps1 .env.mt5.
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_live_once.ps1 .env.mt5.local
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_paper_loop.ps1 .env.mt5.local --iterations 10
 ```
+
+### 候选分支纸面盘
+
+如果当前要在 Windows 宿主机上跑 `sell-only + us-only pullback v3`，推荐直接用独立配置，不要覆盖主线 `mt5_paper.yaml`：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_host_check.ps1 .env.mt5.local -ConfigPath .\configs\mt5_paper_pullback_sell_v3.yaml
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_preflight.ps1 .env.mt5.local -ConfigPath .\configs\mt5_paper_pullback_sell_v3.yaml
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_deploy_gate.ps1 .env.mt5.local -ConfigPath .\configs\mt5_paper_pullback_sell_v3.yaml
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_live_once.ps1 .env.mt5.local -ConfigPath .\configs\mt5_paper_pullback_sell_v3.yaml
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_paper_loop.ps1 .env.mt5.local -ConfigPath .\configs\mt5_paper_pullback_sell_v3.yaml --iterations 10
+```
+
+这条链路会自动使用：
+
+- 独立报告目录：`reports/research_pullback_sell_v3`
+- 独立纸盘数据库：`var/xauusd_ai/paper_pullback_sell_v3.db`
+- 独立 MT5 magic：`2026033003`
+
+如果你希望直接按一份清单从研究机推到 Windows VPS，可以继续看：
+
+- `docs/implementation/pullback_sell_v3_vps_paper_runbook.md`
+
+如果你后续只想记候选线自己的固定入口，也可以直接使用这些包装脚本：
+
+- `scripts/mt5_pullback_sell_v3_prepare.ps1`
+- `scripts/mt5_pullback_sell_v3_paper_loop.ps1`
+- `scripts/mt5_pullback_sell_v3_register_task.ps1`
+- `scripts/mt5_pullback_sell_v3_task_status.ps1`
+- `scripts/mt5_pullback_sell_v3_unregister_task.ps1`
 
 ### 生产盘
 
@@ -310,6 +395,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_prod_loop.ps1 .env.mt5.lo
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_register_task.ps1 -Mode paper -EnvFile .env.mt5.local -StartAfterRegister
 ```
 
+注册候选分支纸面盘任务：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_register_task.ps1 -Mode paper -EnvFile .env.mt5.local -ConfigPath .\configs\mt5_paper_pullback_sell_v3.yaml -StartAfterRegister
+```
+
 注册生产盘任务：
 
 ```powershell
@@ -319,9 +410,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_register_task.ps1 -Mode p
 默认行为：
 
 - 任务名默认是 `xauusd-ai-paper-loop` 或 `xauusd-ai-prod-loop`
+- 如果指定了非默认配置，任务名会自动带上配置名后缀
+  例如：`xauusd-ai-paper-mt5-paper-pullback-sell-v3-loop`
 - 触发方式默认是“用户登录后启动”
 - 任务实际先拉起 `mt5_task_runner.ps1`，再由它调用仓库内 `mt5_paper_loop.ps1` 或 `mt5_prod_loop.ps1`
 - `mt5_task_runner.ps1` 会把 stdout / stderr 落到 `var/xauusd_ai/task_logs/<mode>/run_<timestamp>.log`
+- 如果指定了非默认配置，日志目录也会自动按配置名拆开
 - 默认只保留最近 20 份任务日志，避免宿主机长期运行后日志无限增长
 - 因为循环脚本已经带 `deploy-gate + preflight`，所以计划任务启动时也会沿用同一套门禁
 
@@ -331,10 +425,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_register_task.ps1 -Mode p
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_task_status.ps1 -Mode paper
 ```
 
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_task_status.ps1 -Mode paper -ConfigPath .\configs\mt5_paper_pullback_sell_v3.yaml
+```
+
 查看任务状态并直接看最新日志尾部：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_task_status.ps1 -Mode prod -TailLog
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_task_status.ps1 -Mode paper -ConfigPath .\configs\mt5_paper_pullback_sell_v3.yaml -TailLog
 ```
 
 这条命令会输出：
@@ -345,6 +447,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_task_status.ps1 -Mode pro
 - `last_task_result`
 - `runner_script`
 - `env_file`
+- `config_path`
 - `log_dir`
 - `latest_log`
 
@@ -352,6 +455,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_task_status.ps1 -Mode pro
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_unregister_task.ps1 -Mode paper
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_unregister_task.ps1 -Mode paper -ConfigPath .\configs\mt5_paper_pullback_sell_v3.yaml
 ```
 
 ```powershell

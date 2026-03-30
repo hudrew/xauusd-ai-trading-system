@@ -412,6 +412,45 @@ def _run_report_import(
     )
 
 
+def _run_report_export(
+    config: SystemConfig,
+    *,
+    output_path: str,
+    report_type: str | None,
+    report_dir: str | None,
+) -> None:
+    from .storage.report_catalog import FileReportCatalog
+
+    archive_config = _build_report_archive_config(config, report_dir)
+    catalog = FileReportCatalog(archive_config)
+    details = catalog.latest_report(report_type=report_type)
+    if details is None:
+        raise SystemExit("No archived report available for export.")
+
+    source_path = Path(details.record.latest_path or details.record.archive_path)
+    if not source_path.exists():
+        raise SystemExit(f"Archived report file not found: {source_path}")
+
+    resolved_output_path = Path(output_path)
+    resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_output_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+    print(
+        json.dumps(
+            {
+                "exported": True,
+                "report_type": details.record.report_type,
+                "checked_at": details.checked_at,
+                "ready": details.record.ready,
+                "source_path": str(source_path),
+                "output_path": str(resolved_output_path),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+
+
 def _run_export_mt5_history(
     config: SystemConfig,
     *,
@@ -797,6 +836,24 @@ def main() -> None:
         default=None,
         help="Optional override for report_archive.base_dir. Relative paths are resolved from the project root.",
     )
+    report_export_parser = subparsers.add_parser(
+        "report-export",
+        help="Export the latest archived report envelope into a portable JSON file.",
+    )
+    report_export_parser.add_argument(
+        "output_path",
+        help="Path to the JSON file to write.",
+    )
+    report_export_parser.add_argument(
+        "--report-type",
+        default="acceptance",
+        help="Report type to export. Defaults to acceptance.",
+    )
+    report_export_parser.add_argument(
+        "--report-dir",
+        default=None,
+        help="Optional override for report_archive.base_dir. Relative paths are resolved from the project root.",
+    )
     export_mt5_parser = subparsers.add_parser(
         "export-mt5-history",
         help="Export MT5 historical bars into a normalized CSV for replay/backtest/acceptance.",
@@ -990,6 +1047,14 @@ def main() -> None:
         _run_report_import(
             config,
             json_path=args.json_path,
+            report_type=args.report_type,
+            report_dir=args.report_dir,
+        )
+        return
+    if args.command == "report-export":
+        _run_report_export(
+            config,
+            output_path=args.output_path,
             report_type=args.report_type,
             report_dir=args.report_dir,
         )

@@ -11,10 +11,11 @@
 ## 当前入口
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli deploy-gate --config configs/mt5_prod.yaml --strict
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mt5_prod.yaml deploy-gate --strict
 ```
 
 加上 `--strict` 后，如果门禁没有通过，命令会以退出码 `2` 结束。
+说明：`--config` 是 CLI 全局参数，必须放在子命令前面。
 这一步可以直接接到：
 
 - 本地上线前自检
@@ -90,19 +91,25 @@ PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli deploy-gate --config c
 只看门禁 JSON，不阻断：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli deploy-gate --config configs/mt5_prod.yaml
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mt5_prod.yaml deploy-gate
 ```
 
 严格阻断：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli deploy-gate --config configs/mt5_prod.yaml --strict
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mt5_prod.yaml deploy-gate --strict
 ```
 
 覆盖验收归档目录：
 
 ```bash
 PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli deploy-gate --report-dir reports/research
+```
+
+候选分支 `pullback sell v3` 使用独立归档目录时：
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mt5_paper_pullback_sell_v3.yaml deploy-gate --report-dir reports/research_pullback_sell_v3
 ```
 
 临时跳过实时检查：
@@ -135,18 +142,34 @@ PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli live-once --require-pr
 PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli report-import C:/work/incoming/acceptance_latest.json --report-dir reports/research
 ```
 
+先把当前机器里的最新验收归档导出成可传输文件：
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli report-export ./tmp/acceptance_latest.json --report-dir reports/research
+```
+
 推荐顺序：
 
 ```bash
 PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli report-import C:/work/incoming/acceptance_latest.json --report-dir reports/research
 PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli reports latest --report-dir reports/research
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli deploy-gate --config configs/mt5_prod.yaml --strict
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mt5_prod.yaml deploy-gate --strict
+```
+
+候选分支 `pullback sell v3` 推荐顺序：
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli report-export ./tmp/research_pullback_sell_v3_acceptance_latest.json --report-dir reports/research_pullback_sell_v3
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli report-import C:/work/incoming/acceptance_latest.json --report-dir reports/research_pullback_sell_v3
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli reports latest --report-dir reports/research_pullback_sell_v3
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mt5_paper_pullback_sell_v3.yaml deploy-gate --report-dir reports/research_pullback_sell_v3 --strict
 ```
 
 说明：
 
 - `report-import` 同时支持直接导入 `acceptance` 命令输出的原始 JSON
 - 也支持直接导入归档目录里的 `latest.json`
+- `report-export` 会导出当前归档里的最新 envelope，适合从研究机带到执行宿主机
 - 门禁新鲜度优先读取报告内部的 `checked_at`，不是导入时间
 - 所以这一步适合“研究在 A 机执行，MT5 在 B 机执行”的正式分工
 

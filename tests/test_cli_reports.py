@@ -110,6 +110,50 @@ class ReportCliTests(unittest.TestCase):
             )
             self.assertTrue(imported_envelope["ready"])
 
+    def test_report_export_writes_latest_envelope_to_requested_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            report_dir = Path(tmpdir) / "research"
+            output_path = Path(tmpdir) / "exports" / "acceptance_latest.json"
+            archive = FileReportArchive(
+                ReportArchiveConfig(
+                    enabled=True,
+                    base_dir=str(report_dir),
+                    write_latest=True,
+                )
+            )
+            archive.save(
+                "acceptance",
+                {
+                    "checked_at": "2026-03-29T12:00:00+00:00",
+                    "checks": [],
+                },
+                summary={"failed_checks": 0, "total_checks": 10},
+                ready=True,
+            )
+
+            buffer = StringIO()
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "xauusd_ai_system.cli",
+                    "report-export",
+                    str(output_path),
+                    "--report-dir",
+                    str(report_dir),
+                ],
+            ):
+                with redirect_stdout(buffer):
+                    main()
+
+            payload = json.loads(buffer.getvalue())
+            self.assertTrue(payload["exported"])
+            self.assertEqual(payload["report_type"], "acceptance")
+            self.assertTrue(output_path.exists())
+            exported_envelope = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(exported_envelope["report_type"], "acceptance")
+            self.assertTrue(exported_envelope["ready"])
+
 
 if __name__ == "__main__":
     unittest.main()

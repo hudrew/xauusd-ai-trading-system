@@ -9,4 +9,5 @@ ENV_FILE="${1:-${DEFAULT_ENV_FILE}}"
 
 ensure_venv
 load_env_file "${ENV_FILE}"
-run_cli "${ROOT_DIR}/configs/mt5_paper.yaml" live-loop --require-deploy-gate --require-preflight "${@:2}"
+CONFIG_PATH="$(resolve_mt5_config "" "paper")"
+run_cli "${CONFIG_PATH}" live-loop --require-deploy-gate --require-preflight "${@:2}"

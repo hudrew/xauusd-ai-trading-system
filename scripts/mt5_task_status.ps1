@@ -1,6 +1,8 @@
 param(
     [ValidateSet("paper", "prod")]
     [string]$Mode = $(if ($env:XAUUSD_AI_ENV -eq "prod") { "prod" } else { "paper" }),
+    [string]$EnvFile,
+    [string]$ConfigPath,
     [string]$TaskName,
     [string]$LogDir,
     [switch]$AsJson,
@@ -53,7 +55,16 @@ function Get-LastTaskResultDescription {
     }
 }
 
-$resolvedTaskName = if ($TaskName) { $TaskName } else { Get-DefaultMt5TaskName -Mode $Mode }
+if ($EnvFile) {
+    $resolvedEnvFile = Resolve-AbsoluteProjectPath -PathValue $EnvFile
+    if (-not (Test-Path $resolvedEnvFile)) {
+        throw "Env file not found: $resolvedEnvFile"
+    }
+    Load-EnvFile -EnvFile $resolvedEnvFile
+}
+
+$resolvedConfigPath = Resolve-Mt5Config -Mode $Mode -ConfigPath $ConfigPath
+$resolvedTaskName = if ($TaskName) { $TaskName } else { Get-DefaultMt5TaskName -Mode $Mode -ConfigPath $resolvedConfigPath }
 $task = Get-ScheduledTask -TaskName $resolvedTaskName -ErrorAction SilentlyContinue
 if ($null -eq $task) {
     Write-Host "Scheduled task not found: $resolvedTaskName" -ForegroundColor Yellow
@@ -65,6 +76,7 @@ $action = $task.Actions | Select-Object -First 1
 $actionArguments = if ($null -ne $action) { $action.Arguments } else { $null }
 $runnerScriptPath = Get-ActionArgumentValue -Arguments $actionArguments -Name "File"
 $envFileFromAction = Get-ActionArgumentValue -Arguments $actionArguments -Name "EnvFile"
+$configPathFromAction = Get-ActionArgumentValue -Arguments $actionArguments -Name "ConfigPath"
 $logDirFromAction = Get-ActionArgumentValue -Arguments $actionArguments -Name "LogDir"
 $resolvedLogDir = if ($LogDir) {
     Resolve-AbsoluteProjectPath -PathValue $LogDir
@@ -73,7 +85,7 @@ elseif ($logDirFromAction) {
     $logDirFromAction
 }
 else {
-    Get-DefaultMt5TaskLogDir -Mode $Mode
+    Get-DefaultMt5TaskLogDir -Mode $Mode -ConfigPath $resolvedConfigPath
 }
 $latestLog = Get-LatestChildItem -PathValue $resolvedLogDir -Filter "*.log"
 $lastResult = [int64]$taskInfo.LastTaskResult
@@ -104,6 +116,7 @@ $status = [ordered]@{
     working_directory = if ($null -ne $action) { $action.WorkingDirectory } else { $null }
     runner_script = $runnerScriptPath
     env_file = $envFileFromAction
+    config_path = $(if ($configPathFromAction) { $configPathFromAction } else { $resolvedConfigPath })
     log_dir = $resolvedLogDir
     latest_log = if ($null -ne $latestLog) { $latestLog.FullName } else { $null }
     latest_log_updated_at = if ($null -ne $latestLog) { $latestLog.LastWriteTime } else { $null }

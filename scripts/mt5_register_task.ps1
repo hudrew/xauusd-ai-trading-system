@@ -2,6 +2,7 @@ param(
     [ValidateSet("paper", "prod")]
     [string]$Mode = $(if ($env:XAUUSD_AI_ENV -eq "prod") { "prod" } else { "paper" }),
     [string]$EnvFile,
+    [string]$ConfigPath,
     [string]$TaskName,
     [string]$UserId = $env:USERNAME,
     [switch]$StartAfterRegister,
@@ -29,9 +30,10 @@ if (-not (Test-Path $resolvedEnvFile)) {
 }
 
 Load-EnvFile -EnvFile $resolvedEnvFile
+$resolvedConfigPath = Resolve-Mt5Config -Mode $Mode -ConfigPath $ConfigPath
 
 $taskRunnerPath = Join-Path $PSScriptRoot "mt5_task_runner.ps1"
-$resolvedLogDir = Ensure-Directory -PathValue (Get-DefaultMt5TaskLogDir -Mode $Mode)
+$resolvedLogDir = Ensure-Directory -PathValue (Get-DefaultMt5TaskLogDir -Mode $Mode -ConfigPath $resolvedConfigPath)
 $loopScriptName = if ($Mode -eq "prod") { "mt5_prod_loop.ps1" } else { "mt5_paper_loop.ps1" }
 $loopScriptPath = Join-Path $PSScriptRoot $loopScriptName
 if (-not (Test-Path $taskRunnerPath)) {
@@ -41,7 +43,7 @@ if (-not (Test-Path $loopScriptPath)) {
     throw "Loop script not found: $loopScriptPath"
 }
 
-$resolvedTaskName = if ($TaskName) { $TaskName } else { Get-DefaultMt5TaskName -Mode $Mode }
+$resolvedTaskName = if ($TaskName) { $TaskName } else { Get-DefaultMt5TaskName -Mode $Mode -ConfigPath $resolvedConfigPath }
 $resolvedUserId = if ([string]::IsNullOrWhiteSpace($UserId)) { $env:USERNAME } else { $UserId }
 if ([string]::IsNullOrWhiteSpace($resolvedUserId)) {
     throw "UserId is required to register an interactive scheduled task."
@@ -58,6 +60,8 @@ $argumentString = @(
     $Mode
     "-EnvFile"
     ('"{0}"' -f $resolvedEnvFile)
+    "-ConfigPath"
+    ('"{0}"' -f $resolvedConfigPath)
     "-LogDir"
     ('"{0}"' -f $resolvedLogDir)
 ) -join " "
@@ -97,6 +101,7 @@ Write-Host "TaskName: $resolvedTaskName"
 Write-Host "Mode: $Mode"
 Write-Host "UserId: $resolvedUserId"
 Write-Host "EnvFile: $resolvedEnvFile"
+Write-Host "ConfigPath: $resolvedConfigPath"
 Write-Host "TaskRunner: $taskRunnerPath"
 Write-Host "LoopScript: $loopScriptPath"
 Write-Host "LogDir: $resolvedLogDir"

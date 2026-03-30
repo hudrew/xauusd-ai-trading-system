@@ -12,6 +12,7 @@ dist/
 .DS_Store
 tmp/
 var/
+reports/
 .vscode/
 .idea/
 .env.mt5.local

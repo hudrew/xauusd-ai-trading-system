@@ -72,6 +72,89 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn("Get-ScheduledTaskInfo", status_content)
         self.assertIn("Latest log tail", status_content)
 
+    def test_pullback_sell_v3_prepare_script_exists(self) -> None:
+        script = ROOT / "scripts/mt5_pullback_sell_v3_prepare.ps1"
+
+        self.assertTrue(script.exists())
+        content = script.read_text(encoding="utf-8")
+        self.assertIn("mt5_paper_pullback_sell_v3.yaml", content)
+        self.assertIn('"report-import"', content)
+        self.assertIn('"host-check", "--strict"', content)
+        self.assertIn('"preflight", "--strict"', content)
+        self.assertIn('"deploy-gate", "--strict"', content)
+        self.assertIn('"live-once", "--require-deploy-gate", "--require-preflight"', content)
+
+    def test_pullback_sell_v3_runtime_wrapper_scripts_exist(self) -> None:
+        relative_paths = (
+            "scripts/mt5_pullback_sell_v3_paper_loop.ps1",
+            "scripts/mt5_pullback_sell_v3_register_task.ps1",
+            "scripts/mt5_pullback_sell_v3_task_status.ps1",
+            "scripts/mt5_pullback_sell_v3_unregister_task.ps1",
+        )
+
+        for relative_path in relative_paths:
+            content = (ROOT / relative_path).read_text(encoding="utf-8")
+            self.assertIn("configs\\mt5_paper_pullback_sell_v3.yaml", content, relative_path)
+
+        self.assertIn(
+            "mt5_paper_loop.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v3_paper_loop.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_register_task.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v3_register_task.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_task_status.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v3_task_status.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_unregister_task.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v3_unregister_task.ps1").read_text(encoding="utf-8"),
+        )
+
+    def test_runtime_scripts_support_explicit_config_override(self) -> None:
+        shell_common = (ROOT / "scripts/_mt5_common.sh").read_text(encoding="utf-8")
+        ps_common = (ROOT / "scripts/_mt5_common.ps1").read_text(encoding="utf-8")
+        register_content = (ROOT / "scripts/mt5_register_task.ps1").read_text(encoding="utf-8")
+        runner_content = (ROOT / "scripts/mt5_task_runner.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("XAUUSD_AI_CONFIG_PATH", shell_common)
+        self.assertIn("Get-DefaultMt5TaskName -Mode $Mode -ConfigPath $resolvedConfigPath", register_content)
+        self.assertIn("-ConfigPath", register_content)
+        self.assertIn("-ConfigPath $resolvedConfigPath", runner_content)
+        self.assertIn("$env:XAUUSD_AI_CONFIG_PATH", ps_common)
+
+    def test_pullback_sell_v3_acceptance_scripts_exist(self) -> None:
+        shell_script = ROOT / "scripts/research_pullback_sell_v3_acceptance.sh"
+        powershell_script = ROOT / "scripts/research_pullback_sell_v3_acceptance.ps1"
+
+        self.assertTrue(shell_script.exists())
+        self.assertTrue(powershell_script.exists())
+        shell_content = shell_script.read_text(encoding="utf-8")
+        powershell_content = powershell_script.read_text(encoding="utf-8")
+
+        self.assertIn("mvp_pullback_sell_research_v3_branch_gate.yaml", shell_content)
+        self.assertIn("reports/research_pullback_sell_v3", shell_content)
+        self.assertIn("acceptance", shell_content)
+        self.assertIn("mvp_pullback_sell_research_v3_branch_gate.yaml", powershell_content)
+        self.assertIn("research_pullback_sell_v3", powershell_content)
+        self.assertIn('"acceptance"', powershell_content)
+
+    def test_pullback_sell_v3_export_scripts_exist(self) -> None:
+        shell_script = ROOT / "scripts/research_pullback_sell_v3_export_latest.sh"
+        powershell_script = ROOT / "scripts/research_pullback_sell_v3_export_latest.ps1"
+
+        self.assertTrue(shell_script.exists())
+        self.assertTrue(powershell_script.exists())
+        shell_content = shell_script.read_text(encoding="utf-8")
+        powershell_content = powershell_script.read_text(encoding="utf-8")
+
+        self.assertIn("report-export", shell_content)
+        self.assertIn("research_pullback_sell_v3_acceptance_latest.json", shell_content)
+        self.assertIn("report-export", powershell_content)
+        self.assertIn("research_pullback_sell_v3_acceptance_latest.json", powershell_content)
+
 
 if __name__ == "__main__":
     unittest.main()

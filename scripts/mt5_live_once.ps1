@@ -1,6 +1,8 @@
 param(
+    [Parameter(Position = 0)]
     [string]$EnvFile,
-    [Parameter(ValueFromRemainingArguments = $true)]
+    [string]$ConfigPath,
+    [Parameter(Position = 1, ValueFromRemainingArguments = $true)]
     [string[]]$CliArgs
 )
 
@@ -11,5 +13,5 @@ $ErrorActionPreference = "Stop"
 
 Ensure-Venv
 Load-EnvFile -EnvFile $(if ($EnvFile) { $EnvFile } else { $Script:DefaultEnvFile })
-$configPath = Resolve-Mt5Config
+$configPath = Resolve-Mt5Config -ConfigPath $ConfigPath
 Invoke-Mt5Cli -ConfigPath $configPath -Arguments (@("live-once", "--require-deploy-gate", "--require-preflight") + $CliArgs)

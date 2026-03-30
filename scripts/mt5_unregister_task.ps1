@@ -1,6 +1,8 @@
 param(
     [ValidateSet("paper", "prod")]
     [string]$Mode = $(if ($env:XAUUSD_AI_ENV -eq "prod") { "prod" } else { "paper" }),
+    [string]$EnvFile,
+    [string]$ConfigPath,
     [string]$TaskName
 )
 
@@ -9,7 +11,16 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "_mt5_common.ps1")
 
-$resolvedTaskName = if ($TaskName) { $TaskName } else { Get-DefaultMt5TaskName -Mode $Mode }
+if ($EnvFile) {
+    $resolvedEnvFile = Resolve-AbsoluteProjectPath -PathValue $EnvFile
+    if (-not (Test-Path $resolvedEnvFile)) {
+        throw "Env file not found: $resolvedEnvFile"
+    }
+    Load-EnvFile -EnvFile $resolvedEnvFile
+}
+
+$resolvedConfigPath = Resolve-Mt5Config -Mode $Mode -ConfigPath $ConfigPath
+$resolvedTaskName = if ($TaskName) { $TaskName } else { Get-DefaultMt5TaskName -Mode $Mode -ConfigPath $resolvedConfigPath }
 $task = Get-ScheduledTask -TaskName $resolvedTaskName -ErrorAction SilentlyContinue
 
 if ($null -eq $task) {

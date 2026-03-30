@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+import math
 from pathlib import Path
 from typing import Any
 
@@ -17,9 +18,43 @@ from .reporting import (
     DecisionAuditCollector,
     DecisionAuditSummary,
     NON_FEATURE_COLUMNS,
+    TradeAuditSummary,
     TradeSegmentationSummary,
     TradePerformanceCollector,
 )
+
+
+TRADE_AUDIT_FEATURES = (
+    "pullback_depth",
+    "structure_intact",
+    "m1_reversal_confirmed",
+    "volatility_ratio",
+    "spread_ratio",
+    "price_distance_to_ema20",
+    "vwap_deviation",
+    "breakout_distance",
+    "ema_slope_20",
+    "tick_speed",
+    "bollinger_position",
+    "wick_ratio_up",
+    "wick_ratio_down",
+    "range_position",
+    "midline_return_speed",
+    "atr_m1_14",
+    "atr_m5_14",
+)
+
+
+def _normalize_backtest_datetime(value: datetime | Any | None) -> datetime | None:
+    if value is None:
+        return None
+
+    timestamp = value.to_pydatetime() if hasattr(value, "to_pydatetime") else value
+    if not isinstance(timestamp, datetime):
+        timestamp = pd.Timestamp(timestamp).to_pydatetime()
+    if timestamp.tzinfo is not None:
+        return timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+    return timestamp
 
 
 @dataclass
@@ -54,6 +89,7 @@ class BacktraderRunResult:
     commission_paid: float
     decision_summary: DecisionAuditSummary
     trade_segmentation: TradeSegmentationSummary
+    trade_audit: TradeAuditSummary = field(default_factory=TradeAuditSummary)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -87,6 +123,7 @@ class BacktraderRunResult:
             "commission_paid": self.commission_paid,
             "decision_summary": self.decision_summary.as_dict(),
             "trade_segmentation": self.trade_segmentation.as_dict(),
+            "trade_audit": self.trade_audit.as_dict(),
         }
 
 
@@ -161,6 +198,8 @@ def run_backtrader_market_data(
         if slippage_fixed is None
         else float(slippage_fixed)
     )
+    evaluation_start = _normalize_backtest_datetime(evaluation_start)
+    evaluation_end = _normalize_backtest_datetime(evaluation_end)
 
     if slippage_perc > 0 and slippage_fixed > 0:
         raise ValueError("Use either slippage_perc or slippage_fixed, not both.")
@@ -168,6 +207,7 @@ def run_backtrader_market_data(
         raise ValueError("evaluation_start must be earlier than evaluation_end.")
 
     market_data = market_data.copy().sort_values("timestamp").reset_index(drop=True)
+    market_data["timestamp"] = pd.to_datetime(market_data["timestamp"], utc=True).dt.tz_localize(None)
     feature_frame = FeatureCalculator().calculate(market_data)
     records_by_timestamp = {
         row["timestamp"].to_pydatetime().replace(tzinfo=None): row
@@ -197,6 +237,8 @@ def run_backtrader_market_data(
             self.system = TradingSystem(self.p.config)
             self.adapter = BacktraderAdapter()
             self.pending_orders: list[Any] = []
+            self.pending_entry: dict[str, Any] | None = None
+            self.market_exit_slippage_override_active = False
             self.total_decisions = 0
             self.decision_collector = DecisionAuditCollector()
             self.trade_collector = TradePerformanceCollector()
@@ -224,8 +266,11 @@ def run_backtrader_market_data(
             self.peak_value = float(initial_cash)
             self.day_start_value = float(initial_cash)
             self.current_session_date = None
+            self.current_session_tag = None
             self.next_tradeid = 1
             self.trade_context_by_id: dict[int, dict[str, Any]] = {}
+            self.active_tradeid: int | None = None
+            self.active_entry_bar: int | None = None
 
         def next(self) -> None:
             current_value = float(self.broker.getvalue())
@@ -238,6 +283,8 @@ def run_backtrader_market_data(
                 self.day_start_value = current_value
             self.peak_value = max(self.peak_value, current_value)
 
+            self._process_forced_exit()
+
             if any(order.alive() for order in self.pending_orders):
                 return
 
@@ -248,6 +295,9 @@ def run_backtrader_market_data(
                 return
             if self.p.evaluation_end is not None and timestamp > self.p.evaluation_end:
                 return
+
+            session_tag = str(record.get("session_tag", "unknown") or "unknown")
+            self._maybe_reset_consecutive_losses(session_tag)
 
             feature_names = set(record.keys()) - NON_FEATURE_COLUMNS
             features = {name: record.get(name) for name in feature_names}
@@ -270,6 +320,11 @@ def run_backtrader_market_data(
             if self.position.size != 0:
                 return
 
+            # Delay submission by one or more bars so research fills are less idealized.
+            if self.pending_entry is not None and timestamp >= self.pending_entry["submit_after"]:
+                self._submit_pending_entry()
+                return
+
             order_plan = self.adapter.decision_to_order_plan(decision)
             if order_plan is None:
                 return
@@ -280,49 +335,224 @@ def run_backtrader_market_data(
 
             tradeid = self.next_tradeid
             self.next_tradeid += 1
-            self.trade_context_by_id[tradeid] = {
+            trade_context = {
                 "entry_timestamp": timestamp.isoformat(),
                 "entry_month": timestamp.strftime("%Y-%m"),
-                "session_tag": str(record.get("session_tag", "unknown") or "unknown"),
+                "session_tag": session_tag,
                 "strategy_name": decision.signal.strategy_name,
                 "state_label": decision.state.state_label.value,
                 "side": decision.signal.side.value,
+                "state_reason_codes": list(decision.state.reason_codes),
+                "signal_reason": list(decision.signal.signal_reason),
+                "risk_advisory": list(decision.risk.advisory),
                 "volatility_level": (
                     decision.volatility.primary_alert.warning_level.value
                     if decision.volatility is not None
                     else "unavailable"
                 ),
+                "state_confidence_score": float(decision.state.confidence_score),
+                "volatility_risk_score": (
+                    float(decision.volatility.primary_alert.risk_score)
+                    if decision.volatility is not None
+                    else None
+                ),
+                "entry_price": float(decision.signal.entry_price),
+                "stop_loss": float(decision.signal.stop_loss),
+                "take_profit": float(decision.signal.take_profit),
+                "position_size": float(order_plan["position_size"]),
+                "position_scale": float(decision.risk.position_scale),
+                "entry_features": _extract_trade_audit_features(record),
+                "max_hold_bars": int(decision.signal.metadata.get("max_hold_bars", 0) or 0),
+                "exit_reason": "pending",
+                "exit_price": None,
             }
+            self.pending_entry = {
+                "submit_after": timestamp + pd.Timedelta(
+                    minutes=max(int(self.p.config.backtest.fill_delay_bars), 1)
+                ),
+                "tradeid": tradeid,
+                "order_plan": order_plan,
+                "trade_context": trade_context,
+                "size": size,
+            }
+
+        def _maybe_reset_consecutive_losses(self, session_tag: str) -> None:
+            if self.current_session_tag is None:
+                self.current_session_tag = session_tag
+                return
+
+            if (
+                self.p.config.backtest.reset_consecutive_losses_on_session_change
+                and session_tag != self.current_session_tag
+            ):
+                self.current_consecutive_losses = 0
+
+            self.current_session_tag = session_tag
+
+        def _process_forced_exit(self) -> None:
+            if self.position.size == 0 or self.active_tradeid is None or self.active_entry_bar is None:
+                return
+
+            trade_context = self.trade_context_by_id.get(self.active_tradeid)
+            if trade_context is None:
+                return
+
+            max_hold_bars = int(trade_context.get("max_hold_bars", 0) or 0)
+            if max_hold_bars <= 0:
+                return
+
+            held_bars = len(self) - self.active_entry_bar
+            if held_bars < max_hold_bars:
+                return
+
+            trade_context["exit_reason"] = "max_hold_timeout"
+            self._cancel_pending_protection_orders()
+            self._apply_timed_exit_slippage_override()
+            self.close(tradeid=self.active_tradeid)
+
+        def _cancel_pending_protection_orders(self) -> None:
+            for order in list(self.pending_orders):
+                if order.alive():
+                    self.cancel(order)
+
+        def _submit_pending_entry(self) -> None:
+            if self.pending_entry is None:
+                return
+
+            pending_entry = self.pending_entry
+            self.pending_entry = None
+            order_plan = pending_entry["order_plan"]
+            tradeid = int(pending_entry["tradeid"])
+            size = float(pending_entry["size"])
+            stop_loss = self._apply_directional_slippage(
+                float(order_plan["stop_loss"]),
+                side=str(order_plan["side"]),
+                slippage_perc=float(self.p.config.backtest.stop_loss_slippage_perc),
+            )
+            take_profit = self._apply_directional_slippage(
+                float(order_plan["take_profit"]),
+                side=str(order_plan["side"]),
+                slippage_perc=float(self.p.config.backtest.take_profit_slippage_perc),
+            )
+            self.trade_context_by_id[tradeid] = pending_entry["trade_context"]
 
             if order_plan["side"] == "buy":
                 orders = self.buy_bracket(
                     size=size,
                     exectype=bt.Order.Market,
                     tradeid=tradeid,
-                    stopprice=order_plan["stop_loss"],
-                    limitprice=order_plan["take_profit"],
+                    stopprice=stop_loss,
+                    limitprice=take_profit,
                 )
             else:
                 orders = self.sell_bracket(
                     size=size,
                     exectype=bt.Order.Market,
                     tradeid=tradeid,
-                    stopprice=order_plan["stop_loss"],
-                    limitprice=order_plan["take_profit"],
+                    stopprice=stop_loss,
+                    limitprice=take_profit,
                 )
 
             self.pending_orders = [order for order in orders if order is not None]
             self.orders_submitted += len(self.pending_orders)
 
+        def _apply_timed_exit_slippage_override(self) -> None:
+            timed_exit_slippage = max(
+                float(self.p.config.backtest.timed_exit_slippage_perc),
+                0.0,
+            )
+            if timed_exit_slippage <= 0 or slippage_fixed > 0:
+                return
+            self.broker.set_slippage_perc(timed_exit_slippage)
+            self.market_exit_slippage_override_active = True
+
+        def _restore_default_slippage(self) -> None:
+            if not self.market_exit_slippage_override_active:
+                return
+            if slippage_perc > 0:
+                self.broker.set_slippage_perc(slippage_perc)
+            elif slippage_fixed > 0:
+                self.broker.set_slippage_fixed(slippage_fixed)
+            else:
+                self.broker.set_slippage_perc(0.0)
+            self.market_exit_slippage_override_active = False
+
+        def _apply_directional_slippage(
+            self,
+            price: float,
+            *,
+            side: str,
+            slippage_perc: float,
+        ) -> float:
+            slippage_perc = max(float(slippage_perc), 0.0)
+            if slippage_perc <= 0:
+                return price
+
+            if side == "buy":
+                direction = -1.0
+            else:
+                direction = 1.0
+            return price * (1.0 + direction * slippage_perc)
+
+        def _mark_trade_context(
+            self,
+            tradeid: int,
+            *,
+            entry_timestamp: datetime | None = None,
+            entry_price: float | None = None,
+            exit_reason: str | None = None,
+            exit_price: float | None = None,
+        ) -> None:
+            trade_context = self.trade_context_by_id.get(tradeid)
+            if trade_context is None:
+                return
+
+            if entry_timestamp is not None:
+                trade_context["entry_timestamp"] = entry_timestamp.isoformat()
+                trade_context["entry_month"] = entry_timestamp.strftime("%Y-%m")
+            if entry_price is not None:
+                trade_context["entry_price"] = float(entry_price)
+            if exit_reason is not None:
+                trade_context["exit_reason"] = exit_reason
+            if exit_price is not None:
+                trade_context["exit_price"] = float(exit_price)
+
         def notify_order(self, order: Any) -> None:
             if order.status == order.Completed:
                 self.orders_completed += 1
+                tradeid = int(getattr(order, "tradeid", 0) or 0)
+                executed_at = self.data.datetime.datetime(0).replace(tzinfo=None)
+                executed_price = float(getattr(order.executed, "price", 0.0) or 0.0)
+
+                if (
+                    self.position.size != 0
+                    and getattr(order, "parent", None) is None
+                    and self.active_tradeid is None
+                ):
+                    self.active_tradeid = tradeid
+                    self.active_entry_bar = len(self)
+                    self._mark_trade_context(
+                        tradeid,
+                        entry_timestamp=executed_at,
+                        entry_price=executed_price if executed_price > 0 else None,
+                        exit_reason="open",
+                    )
+                elif self.position.size == 0 and tradeid > 0:
+                    self._mark_trade_context(
+                        tradeid,
+                        exit_reason=self._resolve_exit_reason(order),
+                        exit_price=executed_price if executed_price > 0 else None,
+                    )
+                    self._restore_default_slippage()
             elif order.status == order.Cancelled:
                 self.orders_cancelled += 1
+                self._restore_default_slippage()
             elif order.status == order.Margin:
                 self.orders_margin += 1
+                self._restore_default_slippage()
             elif order.status == order.Rejected:
                 self.orders_rejected += 1
+                self._restore_default_slippage()
 
             terminal_statuses = [
                 order.Completed,
@@ -335,6 +565,22 @@ def run_backtrader_market_data(
                 self.pending_orders = [
                     item for item in self.pending_orders if item.ref != order.ref
                 ]
+
+        def _resolve_exit_reason(self, order: Any) -> str:
+            tradeid = int(getattr(order, "tradeid", 0) or 0)
+            trade_context = self.trade_context_by_id.get(tradeid, {})
+            existing_reason = str(trade_context.get("exit_reason", "") or "")
+            if existing_reason and existing_reason not in {"pending", "open"}:
+                return existing_reason
+
+            exectype = getattr(order, "exectype", None)
+            if exectype == bt.Order.Stop:
+                return "stop_loss"
+            if exectype == bt.Order.Limit:
+                return "take_profit"
+            if exectype == bt.Order.Market:
+                return "market_exit"
+            return "unknown"
 
         def notify_trade(self, trade: Any) -> None:
             if not trade.isclosed:
@@ -359,7 +605,21 @@ def run_backtrader_market_data(
                     "strategy_name": "unknown",
                     "state_label": "unknown",
                     "side": "unknown",
+                    "state_reason_codes": [],
+                    "signal_reason": [],
+                    "risk_advisory": [],
                     "volatility_level": "unavailable",
+                    "state_confidence_score": None,
+                    "volatility_risk_score": None,
+                    "entry_price": None,
+                    "stop_loss": None,
+                    "take_profit": None,
+                    "position_size": None,
+                    "position_scale": None,
+                    "entry_features": {},
+                    "max_hold_bars": 0,
+                    "exit_reason": "unknown",
+                    "exit_price": None,
                 },
             )
             self.trade_collector.record(
@@ -385,6 +645,9 @@ def run_backtrader_market_data(
             else:
                 self.current_consecutive_losses = 0
 
+            self.active_tradeid = None
+            self.active_entry_bar = None
+
         def stop(self) -> None:
             self.equity_curve.append(float(self.broker.getvalue()))
 
@@ -406,6 +669,7 @@ def run_backtrader_market_data(
     final_value = float(cerebro.broker.getvalue())
     decision_summary = strategy.decision_collector.build_summary()
     trade_segmentation = strategy.trade_collector.build_summary()
+    trade_audit = strategy.trade_collector.build_audit_summary()
     gross_profit = sum(strategy.trade_wins)
     gross_loss = abs(sum(strategy.trade_losses))
     return BacktraderRunResult(
@@ -442,6 +706,7 @@ def run_backtrader_market_data(
         commission_paid=round(strategy.commission_paid, 4),
         decision_summary=decision_summary,
         trade_segmentation=trade_segmentation,
+        trade_audit=trade_audit,
     )
 
 
@@ -502,3 +767,35 @@ def _max_drawdown_pct(equity_curve: list[float]) -> float:
             _safe_ratio(peak - value, peak),
         )
     return max_drawdown_pct
+
+
+def _extract_trade_audit_features(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        name: _serialize_trade_feature(record.get(name))
+        for name in TRADE_AUDIT_FEATURES
+        if name in record
+    }
+
+
+def _serialize_trade_feature(value: Any) -> Any:
+    if value is None:
+        return None
+    if hasattr(value, "item"):
+        return _serialize_trade_feature(value.item())
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return None
+        return round(value, 6)
+    if isinstance(value, str):
+        return value
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if not math.isfinite(numeric):
+        return None
+    return round(numeric, 6)

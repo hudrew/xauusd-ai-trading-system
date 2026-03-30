@@ -294,7 +294,7 @@ PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli acceptance /path/to/xa
 从 MT5 直接导出历史 M1 数据到 CSV：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli export-mt5-history ./tmp/xauusd_m1_history.csv --config configs/mt5_paper.yaml --bars 20000 --timeframe M1
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mt5_paper.yaml export-mt5-history ./tmp/xauusd_m1_history.csv --bars 20000 --timeframe M1
 ```
 
 查看最近 5 次验收归档：
@@ -321,12 +321,18 @@ PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli reports trend --limit 
 PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli report-import /path/to/latest.json
 ```
 
+把当前项目归档里的最新报告导出成可传输文件：
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli report-export /path/to/acceptance_latest.json
+```
+
 如果研究报告是在另一台机器生成的，这一步可以把它正式写入当前仓库的 `reports/research`，然后再跑 `deploy-gate`。
 
 运行统一上线门禁：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli deploy-gate --config configs/mt5_prod.yaml --strict
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mt5_prod.yaml deploy-gate --strict
 ```
 
 当前 `live-once / live-loop` 的启动规则也已经升级：
@@ -338,7 +344,7 @@ PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli deploy-gate --config c
 也可以直接走 CLI：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli replay /path/to/xauusd_m1.csv --config configs/mvp.yaml
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mvp.yaml replay /path/to/xauusd_m1.csv
 ```
 
 运行 Backtrader 成交回测：
@@ -350,7 +356,7 @@ PYTHONPATH=src ./.venv/bin/python examples/backtest_csv.py /path/to/xauusd_m1.cs
 也可以直接走 CLI：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli backtest /path/to/xauusd_m1.csv --config configs/mvp.yaml
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mvp.yaml backtest /path/to/xauusd_m1.csv
 ```
 
 运行样本内 / 样本外切分：
@@ -362,7 +368,7 @@ PYTHONPATH=src ./.venv/bin/python examples/sample_split_csv.py /path/to/xauusd_m
 也可以直接走 CLI：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli sample-split /path/to/xauusd_m1.csv --config configs/mvp.yaml --train-ratio 0.7 --warmup-bars 720
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mvp.yaml sample-split /path/to/xauusd_m1.csv --train-ratio 0.7 --warmup-bars 720
 ```
 
 运行 walk-forward：
@@ -374,7 +380,7 @@ PYTHONPATH=src ./.venv/bin/python examples/walk_forward_csv.py /path/to/xauusd_m
 也可以直接走 CLI：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli walk-forward /path/to/xauusd_m1.csv --config configs/mvp.yaml --train-bars 5000 --test-bars 1000 --step-bars 1000 --warmup-bars 720
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mvp.yaml walk-forward /path/to/xauusd_m1.csv --train-bars 5000 --test-bars 1000 --step-bars 1000 --warmup-bars 720
 ```
 
 运行自动验收结论：
@@ -386,20 +392,20 @@ PYTHONPATH=src ./.venv/bin/python examples/acceptance_csv.py /path/to/xauusd_m1.
 也可以直接走 CLI：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli acceptance /path/to/xauusd_m1.csv --config configs/mvp.yaml --train-ratio 0.7 --warmup-bars 720 --train-bars 5000 --test-bars 1000 --step-bars 1000
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mvp.yaml acceptance /path/to/xauusd_m1.csv --train-ratio 0.7 --warmup-bars 720 --train-bars 5000 --test-bars 1000 --step-bars 1000
 ```
 
 临时改归档目录：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli acceptance /path/to/xauusd_m1.csv --config configs/mvp.yaml --report-dir /tmp/xauusd_reports
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mvp.yaml acceptance /path/to/xauusd_m1.csv --report-dir /tmp/xauusd_reports
 ```
 
 把 MT5 历史导出和验收串起来：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli export-mt5-history ./tmp/xauusd_m1_history.csv --config configs/mt5_paper.yaml --bars 20000 --timeframe M1
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli acceptance ./tmp/xauusd_m1_history.csv --config configs/mvp.yaml
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mt5_paper.yaml export-mt5-history ./tmp/xauusd_m1_history.csv --bars 20000 --timeframe M1
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mvp.yaml acceptance ./tmp/xauusd_m1_history.csv
 ```
 
 把另一台机器生成的 `latest.json` 导入到当前归档目录：
@@ -411,7 +417,7 @@ PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli report-import /path/to
 只看输出、不落盘：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli acceptance /path/to/xauusd_m1.csv --config configs/mvp.yaml --no-save-archive
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mvp.yaml acceptance /path/to/xauusd_m1.csv --no-save-archive
 ```
 
 ## 新增 CLI 入口
@@ -419,40 +425,40 @@ PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli acceptance /path/to/xa
 单次实时拉取并处理一次：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli live-once --config configs/mvp.yaml
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mvp.yaml live-once
 ```
 
 上线前预检：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli preflight --config configs/mvp.yaml
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mvp.yaml preflight
 ```
 
 严格模式预检，未通过直接返回非零退出码：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli preflight --config configs/mt5_prod.yaml --strict
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mt5_prod.yaml preflight --strict
 ```
 
 持续轮询：
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli live-loop --config configs/mvp.yaml --iterations 10 --require-deploy-gate --require-preflight
+PYTHONPATH=src ./.venv/bin/python -m xauusd_ai_system.cli --config configs/mvp.yaml live-loop --iterations 10 --require-deploy-gate --require-preflight
 ```
 
 安装后也可以直接用：
 
 ```bash
 xauusd-ai smoke
-xauusd-ai host-check --config configs/mt5_paper.yaml
-xauusd-ai preflight --config configs/mvp.yaml
-xauusd-ai live-once --config configs/mvp.yaml
-xauusd-ai replay /path/to/xauusd_m1.csv --config configs/mvp.yaml
-xauusd-ai backtest /path/to/xauusd_m1.csv --config configs/mvp.yaml
-xauusd-ai sample-split /path/to/xauusd_m1.csv --config configs/mvp.yaml --train-ratio 0.7 --warmup-bars 720
-xauusd-ai walk-forward /path/to/xauusd_m1.csv --config configs/mvp.yaml --train-bars 5000 --test-bars 1000 --step-bars 1000 --warmup-bars 720
-xauusd-ai acceptance /path/to/xauusd_m1.csv --config configs/mvp.yaml --train-ratio 0.7 --warmup-bars 720 --train-bars 5000 --test-bars 1000 --step-bars 1000
-xauusd-ai export-mt5-history ./tmp/xauusd_m1_history.csv --config configs/mt5_paper.yaml --bars 20000 --timeframe M1
+xauusd-ai --config configs/mt5_paper.yaml host-check
+xauusd-ai --config configs/mvp.yaml preflight
+xauusd-ai --config configs/mvp.yaml live-once
+xauusd-ai --config configs/mvp.yaml replay /path/to/xauusd_m1.csv
+xauusd-ai --config configs/mvp.yaml backtest /path/to/xauusd_m1.csv
+xauusd-ai --config configs/mvp.yaml sample-split /path/to/xauusd_m1.csv --train-ratio 0.7 --warmup-bars 720
+xauusd-ai --config configs/mvp.yaml walk-forward /path/to/xauusd_m1.csv --train-bars 5000 --test-bars 1000 --step-bars 1000 --warmup-bars 720
+xauusd-ai --config configs/mvp.yaml acceptance /path/to/xauusd_m1.csv --train-ratio 0.7 --warmup-bars 720 --train-bars 5000 --test-bars 1000 --step-bars 1000
+xauusd-ai --config configs/mt5_paper.yaml export-mt5-history ./tmp/xauusd_m1_history.csv --bars 20000 --timeframe M1
 xauusd-ai report-import /path/to/acceptance_latest.json --report-dir reports/research
 ```
 
