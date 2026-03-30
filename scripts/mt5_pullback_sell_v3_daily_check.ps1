@@ -44,6 +44,38 @@ function Convert-JsonTextToObject {
     return ($JsonText | ConvertFrom-Json)
 }
 
+function Convert-SerializedDateValue {
+    param(
+        [object]$Value
+    )
+
+    if ($null -eq $Value) {
+        return $null
+    }
+
+    if ($Value -is [datetime]) {
+        return [datetime]$Value
+    }
+
+    $text = ([string]$Value).Trim()
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return $null
+    }
+
+    $normalizedText = $text.Replace('\/', '/')
+    $dateMatch = [regex]::Match($normalizedText, '^/Date\((?<milliseconds>-?\d+)\)/$')
+    if ($dateMatch.Success) {
+        return ([DateTimeOffset]::FromUnixTimeMilliseconds([int64]$dateMatch.Groups["milliseconds"].Value)).LocalDateTime
+    }
+
+    try {
+        return [datetime]::Parse($normalizedText, [System.Globalization.CultureInfo]::InvariantCulture)
+    }
+    catch {
+        return $null
+    }
+}
+
 function Invoke-JsonStatusScript {
     param(
         [Parameter(Mandatory = $true)]
@@ -121,6 +153,13 @@ function Get-DailyCheckSummary {
     )
 
     $issues = @()
+    $paperLastRunTime = Convert-SerializedDateValue -Value $PaperTaskStatus.last_run_time
+    $paperLatestLogUpdatedAt = Convert-SerializedDateValue -Value $PaperTaskStatus.latest_log_updated_at
+    $dashboardUpdatedAt = Convert-SerializedDateValue -Value $MonitoringTaskStatus.dashboard_updated_at
+    $serveLastRunTime = Convert-SerializedDateValue -Value $MonitoringTaskStatus.serve.last_run_time
+    $serveLogUpdatedAt = Convert-SerializedDateValue -Value $MonitoringTaskStatus.serve.log_updated_at
+    $refreshLastRunTime = Convert-SerializedDateValue -Value $MonitoringTaskStatus.refresh.last_run_time
+    $refreshLogUpdatedAt = Convert-SerializedDateValue -Value $MonitoringTaskStatus.refresh.log_updated_at
 
     if ([string]$PaperTaskStatus.health -ne "ok") {
         $issues += (New-DailyCheckIssue `
@@ -155,8 +194,8 @@ function Get-DailyCheckSummary {
     }
 
     $dashboardAgeSeconds = $null
-    if ([bool]$MonitoringTaskStatus.dashboard_exists -and $null -ne $MonitoringTaskStatus.dashboard_updated_at) {
-        $dashboardAgeSeconds = [Math]::Round(((Get-Date) - ([datetime]$MonitoringTaskStatus.dashboard_updated_at)).TotalSeconds, 0)
+    if ([bool]$MonitoringTaskStatus.dashboard_exists -and $null -ne $dashboardUpdatedAt) {
+        $dashboardAgeSeconds = [Math]::Round(((Get-Date) - $dashboardUpdatedAt).TotalSeconds, 0)
         if ($dashboardAgeSeconds -gt $FreshnessWarningSeconds) {
             $issues += (New-DailyCheckIssue `
                 -Source "dashboard" `
@@ -199,12 +238,12 @@ function Get-DailyCheckSummary {
             health = $PaperTaskStatus.health
             state = $PaperTaskStatus.state
             enabled = $PaperTaskStatus.enabled
-            last_run_time = $PaperTaskStatus.last_run_time
+            last_run_time = $(if ($null -ne $paperLastRunTime) { $paperLastRunTime.ToString("o") } else { $null })
             last_task_result = $PaperTaskStatus.last_task_result
             last_task_result_hex = $PaperTaskStatus.last_task_result_hex
             last_task_result_description = $PaperTaskStatus.last_task_result_description
             latest_log = $PaperTaskStatus.latest_log
-            latest_log_updated_at = $PaperTaskStatus.latest_log_updated_at
+            latest_log_updated_at = $(if ($null -ne $paperLatestLogUpdatedAt) { $paperLatestLogUpdatedAt.ToString("o") } else { $null })
             latest_log_age_seconds = $PaperTaskStatus.latest_log_age_seconds
             latest_log_has_failure_pattern = $PaperTaskStatus.latest_log_has_failure_pattern
         }
@@ -212,7 +251,7 @@ function Get-DailyCheckSummary {
             health = $MonitoringTaskStatus.health
             dashboard_path = $MonitoringTaskStatus.dashboard_path
             dashboard_exists = $MonitoringTaskStatus.dashboard_exists
-            dashboard_updated_at = $MonitoringTaskStatus.dashboard_updated_at
+            dashboard_updated_at = $(if ($null -ne $dashboardUpdatedAt) { $dashboardUpdatedAt.ToString("o") } else { $null })
             dashboard_age_seconds = $dashboardAgeSeconds
             dashboard_size_bytes = $MonitoringTaskStatus.dashboard_size_bytes
             health_url = $HealthCheck.url
@@ -220,8 +259,38 @@ function Get-DailyCheckSummary {
             health_status_code = $HealthCheck.status_code
             health_body = $HealthCheck.body
             health_error = $HealthCheck.error
-            serve = $MonitoringTaskStatus.serve
-            refresh = $MonitoringTaskStatus.refresh
+            serve = [ordered]@{
+                label = $MonitoringTaskStatus.serve.label
+                task_name = $MonitoringTaskStatus.serve.task_name
+                status = $MonitoringTaskStatus.serve.status
+                health = $MonitoringTaskStatus.serve.health
+                state = $MonitoringTaskStatus.serve.state
+                enabled = $MonitoringTaskStatus.serve.enabled
+                last_run_time = $(if ($null -ne $serveLastRunTime) { $serveLastRunTime.ToString("o") } else { $null })
+                last_task_result = $MonitoringTaskStatus.serve.last_task_result
+                last_task_result_hex = $MonitoringTaskStatus.serve.last_task_result_hex
+                last_task_result_description = $MonitoringTaskStatus.serve.last_task_result_description
+                log_path = $MonitoringTaskStatus.serve.log_path
+                log_exists = $MonitoringTaskStatus.serve.log_exists
+                log_updated_at = $(if ($null -ne $serveLogUpdatedAt) { $serveLogUpdatedAt.ToString("o") } else { $null })
+                log_size_bytes = $MonitoringTaskStatus.serve.log_size_bytes
+            }
+            refresh = [ordered]@{
+                label = $MonitoringTaskStatus.refresh.label
+                task_name = $MonitoringTaskStatus.refresh.task_name
+                status = $MonitoringTaskStatus.refresh.status
+                health = $MonitoringTaskStatus.refresh.health
+                state = $MonitoringTaskStatus.refresh.state
+                enabled = $MonitoringTaskStatus.refresh.enabled
+                last_run_time = $(if ($null -ne $refreshLastRunTime) { $refreshLastRunTime.ToString("o") } else { $null })
+                last_task_result = $MonitoringTaskStatus.refresh.last_task_result
+                last_task_result_hex = $MonitoringTaskStatus.refresh.last_task_result_hex
+                last_task_result_description = $MonitoringTaskStatus.refresh.last_task_result_description
+                log_path = $MonitoringTaskStatus.refresh.log_path
+                log_exists = $MonitoringTaskStatus.refresh.log_exists
+                log_updated_at = $(if ($null -ne $refreshLogUpdatedAt) { $refreshLogUpdatedAt.ToString("o") } else { $null })
+                log_size_bytes = $MonitoringTaskStatus.refresh.log_size_bytes
+            }
         }
         snapshot = [ordered]@{
             runtime_status = $Snapshot.runtime.status
