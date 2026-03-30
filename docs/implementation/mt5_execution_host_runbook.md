@@ -172,6 +172,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_preflight.ps1 .env.mt5.lo
 - 如果 `recent_bars` 仍然能拉到，说明 MT5 初始化、symbol 选择和历史数据链通常是通的
 - 如果同时 `trade_allowed=false`
   需要再区分是停盘期的正常状态，还是账户本身被券商禁用了交易权限
+- 如果刚刚切换了 `.env.mt5.local` 里的账号或服务器
+  现在的 preflight 会在初始化后显式执行一次 `MT5 login`，并校验 `account_info.login`
+  如果终端仍停留在旧账号，会直接报 `unexpected account`，不要忽略这个错误继续跑任务
 
 也就是说，停盘期最值得看的不是单独一个 `bid/ask`，而是要把：
 

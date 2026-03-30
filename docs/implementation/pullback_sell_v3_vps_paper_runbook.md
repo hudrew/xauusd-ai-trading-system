@@ -271,6 +271,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_host_check.ps1 .env.mt5.l
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_preflight.ps1 .env.mt5.local -ConfigPath .\configs\mt5_paper_pullback_sell_v3.yaml
 ```
 
+补充：
+
+- 如果刚改过 `.env.mt5.local` 里的 MT5 账号、密码或服务器，先盯住 `preflight`
+- 预检查现在会显式校验 `account_info.login`
+- 一旦看到 `unexpected account`，说明终端仍在旧账号上下文里，必须先修正再继续 `live_once / paper_loop`
+
 ### 5. 跑候选线门禁
 
 ```powershell

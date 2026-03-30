@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..config.schema import MarketDataConfig
+from ..mt5_session import initialize_mt5_session
 from .base import MarketDataAdapter, Quote
 
 
@@ -130,12 +131,11 @@ class MT5MarketDataAdapter(MarketDataAdapter):
                 "MetaTrader5 is not installed. Install execution dependencies first."
             ) from exc
 
-        initialized = mt5.initialize(
+        initialize_mt5_session(
+            mt5,
             path=self.config.mt5.path,
             login=self.config.mt5.login,
             password=self.config.mt5.password,
             server=self.config.mt5.server,
         )
-        if not initialized:
-            raise RuntimeError(f"MT5 initialize failed: {mt5.last_error()}")
         return mt5

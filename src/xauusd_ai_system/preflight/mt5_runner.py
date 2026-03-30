@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..config.schema import SystemConfig
+from ..mt5_session import initialize_mt5_session
 from .base import PreflightCheck, PreflightReport
 
 
@@ -34,37 +35,43 @@ class MT5PreflightRunner:
             return PreflightReport(platform="mt5", ready=False, checks=checks)
 
         try:
-            initialized = mt5.initialize(
-                path=self._first_non_empty(
-                    self.config.execution.mt5.path,
-                    self.config.market_data.mt5.path,
-                ),
-                login=self._first_non_empty(
-                    self.config.execution.mt5.login,
-                    self.config.market_data.mt5.login,
-                ),
-                password=self._first_non_empty(
-                    self.config.execution.mt5.password,
-                    self.config.market_data.mt5.password,
-                ),
-                server=self._first_non_empty(
-                    self.config.execution.mt5.server,
-                    self.config.market_data.mt5.server,
-                ),
-            )
+            try:
+                initialize_mt5_session(
+                    mt5,
+                    path=self._first_non_empty(
+                        self.config.execution.mt5.path,
+                        self.config.market_data.mt5.path,
+                    ),
+                    login=self._first_non_empty(
+                        self.config.execution.mt5.login,
+                        self.config.market_data.mt5.login,
+                    ),
+                    password=self._first_non_empty(
+                        self.config.execution.mt5.password,
+                        self.config.market_data.mt5.password,
+                    ),
+                    server=self._first_non_empty(
+                        self.config.execution.mt5.server,
+                        self.config.market_data.mt5.server,
+                    ),
+                )
+            except RuntimeError as exc:
+                checks.append(
+                    PreflightCheck(
+                        name="mt5_initialize",
+                        passed=False,
+                        detail=str(exc),
+                    )
+                )
+                return PreflightReport(platform="mt5", ready=False, checks=checks)
+
             checks.append(
                 PreflightCheck(
                     name="mt5_initialize",
-                    passed=bool(initialized),
-                    detail=(
-                        "MT5 initialize succeeded."
-                        if initialized
-                        else f"MT5 initialize failed: {mt5.last_error()}"
-                    ),
+                    passed=True,
+                    detail="MT5 initialize and login succeeded.",
                 )
             )
-            if not initialized:
-                return PreflightReport(platform="mt5", ready=False, checks=checks)
 
             account_info = mt5.account_info()
             checks.append(

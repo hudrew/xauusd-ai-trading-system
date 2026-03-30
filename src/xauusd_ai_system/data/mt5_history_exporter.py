@@ -8,6 +8,7 @@ from typing import Any
 
 from ..config.schema import SystemConfig
 from ..market_data.mt5_adapter import MT5MarketDataAdapter
+from ..mt5_session import initialize_mt5_session
 
 
 @dataclass
@@ -95,7 +96,8 @@ class MT5HistoryCsvExporter:
         if requested_bars <= 0:
             raise ValueError("bars must be positive for MT5 history export.")
 
-        initialized = mt5.initialize(
+        initialize_mt5_session(
+            mt5,
             path=self._first_non_empty(
                 self.config.execution.mt5.path,
                 self.config.market_data.mt5.path,
@@ -113,8 +115,6 @@ class MT5HistoryCsvExporter:
                 self.config.market_data.mt5.server,
             ),
         )
-        if not initialized:
-            raise RuntimeError(f"MT5 initialize failed: {mt5.last_error()}")
 
         try:
             if not mt5.symbol_select(resolved_symbol, True):
@@ -229,7 +229,8 @@ class MT5HistoryCsvExporter:
         if resolved_max_bars <= 0:
             raise ValueError("max_bars must be positive for MT5 history probe.")
 
-        initialized = mt5.initialize(
+        initialize_mt5_session(
+            mt5,
             path=self._first_non_empty(
                 self.config.execution.mt5.path,
                 self.config.market_data.mt5.path,
@@ -247,8 +248,6 @@ class MT5HistoryCsvExporter:
                 self.config.market_data.mt5.server,
             ),
         )
-        if not initialized:
-            raise RuntimeError(f"MT5 initialize failed: {mt5.last_error()}")
 
         try:
             if not mt5.symbol_select(resolved_symbol, True):

@@ -14,6 +14,7 @@ class FakeAccountInfo:
     login = 10001
     equity = 10500.0
     trade_allowed = True
+    server = "TradeMaxGlobal-Demo"
 
 
 class FakeTerminalInfo:
@@ -48,16 +49,25 @@ class FakeMT5:
         self,
         *,
         initialize_ok: bool = True,
+        login_ok: bool = True,
         tradeapi_disabled: bool = False,
         zero_tick: bool = False,
+        account_login: int = 10001,
+        account_server: str = "TradeMaxGlobal-Demo",
     ) -> None:
         self.initialize_ok = initialize_ok
+        self.login_ok = login_ok
         self._tradeapi_disabled = tradeapi_disabled
         self.trade_contract_size = 100.0
         self.zero_tick = zero_tick
+        self.account_login = account_login
+        self.account_server = account_server
 
     def initialize(self, **kwargs):
         return self.initialize_ok
+
+    def login(self, **kwargs):
+        return self.login_ok
 
     def shutdown(self):
         return None
@@ -66,7 +76,10 @@ class FakeMT5:
         return (0, "OK")
 
     def account_info(self):
-        return FakeAccountInfo()
+        info = FakeAccountInfo()
+        info.login = self.account_login
+        info.server = self.account_server
+        return info
 
     def terminal_info(self):
         info = FakeTerminalInfo()
@@ -177,6 +190,25 @@ class MT5PreflightRunnerTests(unittest.TestCase):
         self.assertTrue(tick_check.passed)
         self.assertTrue(tick_check.metadata["zero_quote"])
         self.assertIn("bid/ask are both 0", tick_check.detail)
+
+    def test_preflight_fails_when_terminal_stays_on_unexpected_account(self) -> None:
+        config = SystemConfig()
+        config.market_data.platform = "mt5"
+        config.execution.platform = "mt5"
+        config.runtime.dry_run = True
+        config.execution.mt5.login = 60065894
+        config.execution.mt5.password = "secret"
+        config.execution.mt5.server = "TradeMaxGlobal-Demo"
+
+        report = MT5PreflightRunner(
+            config,
+            mt5_module=FakeMT5(account_login=50182922, account_server="TradeMaxGlobal-Live"),
+        ).run()
+
+        self.assertFalse(report.ready)
+        init_check = next(item for item in report.checks if item.name == "mt5_initialize")
+        self.assertFalse(init_check.passed)
+        self.assertIn("unexpected account", init_check.detail)
 
 
 if __name__ == "__main__":

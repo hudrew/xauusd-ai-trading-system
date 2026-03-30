@@ -44,8 +44,18 @@ class FakeMT5Module:
     DEAL_REASON_SL = 4
     DEAL_REASON_TP = 5
 
-    def __init__(self, *, retcode: int | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        retcode: int | None = None,
+        login_ok: bool = True,
+        account_login: int = 60065894,
+        account_server: str = "TradeMaxGlobal-Demo",
+    ) -> None:
         self.retcode = retcode or self.TRADE_RETCODE_DONE
+        self.login_ok = login_ok
+        self.account_login = account_login
+        self.account_server = account_server
         self.initialized = False
         self.last_request = None
         self.open_orders = []
@@ -56,6 +66,9 @@ class FakeMT5Module:
     def initialize(self, **kwargs):
         self.initialized = True
         return True
+
+    def login(self, **kwargs):
+        return self.login_ok
 
     def shutdown(self):
         self.initialized = False
@@ -89,6 +102,10 @@ class FakeMT5Module:
 
     def last_error(self):
         return (0, "OK")
+
+    def account_info(self):
+        response_type = namedtuple("MT5AccountInfo", ["login", "server"])
+        return response_type(login=self.account_login, server=self.account_server)
 
 
 class MT5ExecutionAdapterNormalizationTests(unittest.TestCase):
@@ -173,6 +190,35 @@ class MT5ExecutionAdapterNormalizationTests(unittest.TestCase):
         self.assertEqual(order.payload["volume"], 0.12)
         self.assertEqual(fake_mt5.last_request["volume"], 0.12)
         self.assertEqual(fake_mt5.last_request["price"], 4495.67)
+
+    def test_submit_order_returns_clear_error_when_account_binding_is_wrong(self) -> None:
+        config = SystemConfig().execution
+        config.platform = "mt5"
+        config.mt5.symbol = "XAUUSD"
+        config.mt5.login = 60065894
+        config.mt5.password = "secret"
+        config.mt5.server = "TradeMaxGlobal-Demo"
+        fake_mt5 = FakeMT5Module(
+            account_login=50182922,
+            account_server="TradeMaxGlobal-Live",
+        )
+        adapter = MT5ExecutionAdapter(config, mt5_module=fake_mt5)
+
+        signal = TradeSignal(
+            strategy_name="pullback",
+            side=TradeSide.SELL,
+            entry_type=EntryType.MARKET,
+            entry_price=4495.56,
+            stop_loss=4495.80,
+            take_profit=4495.10,
+        )
+        risk = RiskDecision(allowed=True, position_size=0.12)
+        order = adapter.build_order(signal, risk)
+
+        result = adapter.submit_order(order)
+
+        self.assertFalse(result.accepted)
+        self.assertIn("unexpected account", result.error_message or "")
 
     def test_sync_execution_state_reports_open_position_for_matching_magic(self) -> None:
         config = SystemConfig().execution

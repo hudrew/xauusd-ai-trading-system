@@ -6,6 +6,7 @@ from typing import Any
 
 from ..config.schema import ExecutionConfig
 from ..core.models import RiskDecision, TradeSignal
+from ..mt5_session import initialize_mt5_session
 from .base import ExecutionAdapter, ExecutionOrder, ExecutionResult, ExecutionSyncResult
 
 
@@ -53,11 +54,13 @@ class MT5ExecutionAdapter(ExecutionAdapter):
     def submit_order(self, order: ExecutionOrder) -> ExecutionResult:
         mt5 = self._mt5()
 
-        if not self._initialize_terminal(mt5):
+        try:
+            self._initialize_terminal(mt5)
+        except RuntimeError as exc:
             return ExecutionResult(
                 accepted=False,
                 platform=self.platform,
-                error_message=f"mt5.initialize failed: {mt5.last_error()}",
+                error_message=str(exc),
             )
 
         if not mt5.symbol_select(order.symbol, True):
@@ -168,7 +171,9 @@ class MT5ExecutionAdapter(ExecutionAdapter):
         use_recent_history: bool,
     ) -> ExecutionSyncResult:
         mt5 = self._mt5()
-        if not self._initialize_terminal(mt5):
+        try:
+            self._initialize_terminal(mt5)
+        except RuntimeError as exc:
             return ExecutionSyncResult(
                 platform=self.platform,
                 symbol=symbol,
@@ -177,7 +182,7 @@ class MT5ExecutionAdapter(ExecutionAdapter):
                 sync_status="sync_initialize_failed",
                 sync_origin=sync_origin,
                 requested_price=requested_price,
-                error_message=f"mt5.initialize failed: {mt5.last_error()}",
+                error_message=str(exc),
             )
 
         try:
@@ -429,14 +434,13 @@ class MT5ExecutionAdapter(ExecutionAdapter):
             ) from exc
         return mt5
 
-    def _initialize_terminal(self, mt5: Any) -> bool:
-        return bool(
-            mt5.initialize(
-                path=self.config.mt5.path,
-                login=self.config.mt5.login,
-                password=self.config.mt5.password,
-                server=self.config.mt5.server,
-            )
+    def _initialize_terminal(self, mt5: Any) -> None:
+        initialize_mt5_session(
+            mt5,
+            path=self.config.mt5.path,
+            login=self.config.mt5.login,
+            password=self.config.mt5.password,
+            server=self.config.mt5.server,
         )
 
     @staticmethod

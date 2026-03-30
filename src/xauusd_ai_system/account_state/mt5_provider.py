@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from ..config.schema import SystemConfig
+from ..mt5_session import initialize_mt5_session
 from .base import AccountStateProvider, BrokerAccountSnapshot
 
 
@@ -59,7 +60,8 @@ class MT5AccountStateProvider(AccountStateProvider):
                 "MetaTrader5 is not installed. Install execution dependencies first."
             ) from exc
 
-        initialized = mt5.initialize(
+        initialize_mt5_session(
+            mt5,
             path=self._first_non_empty(
                 self.config.execution.mt5.path,
                 self.config.market_data.mt5.path,
@@ -77,8 +79,6 @@ class MT5AccountStateProvider(AccountStateProvider):
                 self.config.market_data.mt5.server,
             ),
         )
-        if not initialized:
-            raise RuntimeError(f"MT5 initialize failed: {mt5.last_error()}")
         return mt5
 
     def _symbol(self) -> str:
