@@ -423,6 +423,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_register_task.ps1 -Mode p
 - 如果指定了非默认配置，日志目录也会自动按配置名拆开
 - 默认只保留最近 20 份任务日志，避免宿主机长期运行后日志无限增长
 - 因为循环脚本已经带 `deploy-gate + preflight`，所以计划任务启动时也会沿用同一套门禁
+- `mt5_task_recover.ps1` 现在会在重启任务前，先清理同配置残留的 `mt5_task_runner / mt5_paper_loop / live-loop` 进程树，避免多条旧 loop 同时占用 MT5 IPC
 
 查看任务状态：
 
@@ -506,6 +507,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_unregister_task.ps1 -Mode
 - `var/xauusd_ai/task_logs/<mode>/` 下最近一份运行日志
 - `var/` 或数据库中的审计记录
 - 结构化日志里的 `live_cycle_failed`
+- 现在 `live_cycle_failed` 已经会同时带上异常类型、异常消息和 traceback，优先先看这三项
 - `execution_attempts` 表中的错误信息
 - 如果日志里出现 `IPC initialize failed` 或 `Pipe server didn't answer`
   先确认任务是不是跑在已经登录过 MT5 的交互式用户会话里，并检查任务启动前是否已把 MT5 terminal 进程拉起和预热
