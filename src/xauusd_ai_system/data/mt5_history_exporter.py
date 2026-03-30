@@ -31,6 +31,10 @@ class MT5HistoryExportResult:
 
 
 class MT5HistoryCsvExporter:
+    # MT5 terminals on some hosts reject large single copy_rates_from_pos calls,
+    # so we fetch recent history in smaller slices and stitch it back together.
+    MAX_BARS_PER_REQUEST = 50000
+
     def __init__(self, config: SystemConfig, mt5_module: Any | None = None) -> None:
         self.config = config
         self._mt5_module = mt5_module
@@ -58,6 +62,8 @@ class MT5HistoryCsvExporter:
             or "M1"
         ).upper()
         requested_bars = int(bars or self.config.market_data.mt5.history_bars)
+        if requested_bars <= 0:
+            raise ValueError("bars must be positive for MT5 history export.")
 
         initialized = mt5.initialize(
             path=self._first_non_empty(
@@ -97,20 +103,12 @@ class MT5HistoryCsvExporter:
             if timeframe_value is None:
                 raise ValueError(f"Unsupported MT5 timeframe constant: {resolved_timeframe}")
 
-            bars_payload = mt5.copy_rates_from_pos(
-                resolved_symbol,
-                timeframe_value,
-                0,
-                requested_bars,
+            bars_payload = self._load_bars_in_batches(
+                mt5=mt5,
+                symbol=resolved_symbol,
+                timeframe_value=timeframe_value,
+                requested_bars=requested_bars,
             )
-            if bars_payload is None:
-                raise RuntimeError(
-                    f"MT5 copy_rates_from_pos failed for {resolved_symbol}: {mt5.last_error()}"
-                )
-            if len(bars_payload) == 0:
-                raise RuntimeError(
-                    f"MT5 copy_rates_from_pos returned no bars for {resolved_symbol}."
-                )
 
             output = Path(output_path)
             output.parent.mkdir(parents=True, exist_ok=True)
@@ -182,6 +180,91 @@ class MT5HistoryCsvExporter:
                 "MetaTrader5 is not installed. Install execution dependencies first."
             ) from exc
         return mt5
+
+    def _load_bars_in_batches(
+        self,
+        *,
+        mt5: Any,
+        symbol: str,
+        timeframe_value: Any,
+        requested_bars: int,
+    ) -> list[Any]:
+        chunks: list[list[Any]] = []
+        collected_bars = 0
+        start_pos = 0
+
+        while collected_bars < requested_bars:
+            batch_size = min(
+                requested_bars - collected_bars,
+                int(self.MAX_BARS_PER_REQUEST),
+            )
+            batch = mt5.copy_rates_from_pos(
+                symbol,
+                timeframe_value,
+                start_pos,
+                batch_size,
+            )
+            if batch is None:
+                raise RuntimeError(
+                    self._format_partial_history_error(
+                        symbol=symbol,
+                        requested_bars=requested_bars,
+                        collected_bars=collected_bars,
+                        error=mt5.last_error(),
+                    )
+                )
+
+            batch_rows = list(batch)
+            if not batch_rows:
+                raise RuntimeError(
+                    self._format_partial_history_error(
+                        symbol=symbol,
+                        requested_bars=requested_bars,
+                        collected_bars=collected_bars,
+                        error="copy_rates_from_pos returned no additional bars",
+                    )
+                )
+
+            chunks.append(batch_rows)
+            collected_bars += len(batch_rows)
+            start_pos += len(batch_rows)
+
+            if len(batch_rows) < batch_size and collected_bars < requested_bars:
+                raise RuntimeError(
+                    self._format_partial_history_error(
+                        symbol=symbol,
+                        requested_bars=requested_bars,
+                        collected_bars=collected_bars,
+                        error=(
+                            f"requested batch_size={batch_size}, "
+                            f"returned={len(batch_rows)}"
+                        ),
+                    )
+                )
+
+        merged: list[Any] = []
+        for chunk in reversed(chunks):
+            merged.extend(chunk)
+
+        return merged
+
+    @staticmethod
+    def _format_partial_history_error(
+        *,
+        symbol: str,
+        requested_bars: int,
+        collected_bars: int,
+        error: Any,
+    ) -> str:
+        if collected_bars > 0:
+            return (
+                f"MT5 history export stopped for {symbol} after collecting "
+                f"{collected_bars} of {requested_bars} bars: {error}. "
+                "The terminal likely has fewer bars loaded for this symbol/timeframe. "
+                "Load more history in MT5 and retry."
+            )
+
+        return f"MT5 copy_rates_from_pos failed for {symbol}: {error}"
 
     @staticmethod
     def _first_non_empty(*values: Any) -> Any:

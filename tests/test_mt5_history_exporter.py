@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -22,9 +23,11 @@ class FakeMT5:
     def __init__(self) -> None:
         self.initialized = False
         self.shutdown_calls = 0
+        self._last_error = (0, "OK")
 
     def initialize(self, **kwargs):
         self.initialized = True
+        self._last_error = (0, "OK")
         return True
 
     def shutdown(self):
@@ -32,7 +35,7 @@ class FakeMT5:
         return None
 
     def last_error(self):
-        return (0, "OK")
+        return self._last_error
 
     def symbol_select(self, symbol, enable):
         return True
@@ -65,6 +68,44 @@ class FakeMT5:
         ]
 
 
+class FakeChunkedMT5(FakeMT5):
+    def __init__(self, total_bars: int) -> None:
+        super().__init__()
+        self.calls: list[tuple[str, int, int, int]] = []
+        self._bars = []
+        base_timestamp = 1711731600
+        for index in range(total_bars):
+            open_price = 3000.0 + index
+            self._bars.append(
+                {
+                    "time": base_timestamp + (index * 60),
+                    "open": open_price,
+                    "high": open_price + 1.0,
+                    "low": open_price - 0.5,
+                    "close": open_price + 0.25,
+                    "tick_volume": 10 + index,
+                    "spread": 20 + index,
+                    "real_volume": 0,
+                }
+            )
+
+    def copy_rates_from_pos(self, symbol, timeframe, start, count):
+        self.calls.append((symbol, timeframe, start, count))
+        total = len(self._bars)
+        if start < 0 or count <= 0:
+            self._last_error = (-2, "Terminal: Invalid params")
+            return None
+        if start >= total:
+            self._last_error = (-1, "Terminal: Call failed")
+            return None
+
+        newest_end = total - start
+        oldest_start = max(0, newest_end - count)
+        rows = self._bars[oldest_start:newest_end]
+        self._last_error = (0, "OK")
+        return rows
+
+
 class MT5HistoryCsvExporterTests(unittest.TestCase):
     def test_export_csv_writes_normalized_spread_and_quotes(self) -> None:
         config = SystemConfig()
@@ -93,6 +134,67 @@ class MT5HistoryCsvExporterTests(unittest.TestCase):
             self.assertAlmostEqual(float(rows[0]["bid"]), 3000.375)
             self.assertAlmostEqual(float(rows[0]["ask"]), 3000.625)
             self.assertIn("+00:00", rows[0]["timestamp"])
+
+    def test_export_csv_fetches_recent_history_in_batches(self) -> None:
+        config = SystemConfig()
+        config.market_data.platform = "mt5"
+        config.execution.platform = "mt5"
+        config.market_data.mt5.timeframe = "M1"
+        fake_mt5 = FakeChunkedMT5(total_bars=5)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "history.csv"
+            with patch.object(MT5HistoryCsvExporter, "MAX_BARS_PER_REQUEST", 2):
+                result = MT5HistoryCsvExporter(config, mt5_module=fake_mt5).export_csv(
+                    output_path,
+                    bars=5,
+                )
+
+            self.assertEqual(result.bars_exported, 5)
+            self.assertEqual(
+                fake_mt5.calls,
+                [
+                    ("XAUUSD", fake_mt5.TIMEFRAME_M1, 0, 2),
+                    ("XAUUSD", fake_mt5.TIMEFRAME_M1, 2, 2),
+                    ("XAUUSD", fake_mt5.TIMEFRAME_M1, 4, 1),
+                ],
+            )
+
+            with output_path.open("r", encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+
+            self.assertEqual(len(rows), 5)
+            self.assertEqual(
+                [row["timestamp"] for row in rows],
+                [
+                    "2024-03-29T17:00:00+00:00",
+                    "2024-03-29T17:01:00+00:00",
+                    "2024-03-29T17:02:00+00:00",
+                    "2024-03-29T17:03:00+00:00",
+                    "2024-03-29T17:04:00+00:00",
+                ],
+            )
+
+    def test_export_csv_raises_clear_error_when_terminal_history_is_short(self) -> None:
+        config = SystemConfig()
+        config.market_data.platform = "mt5"
+        config.execution.platform = "mt5"
+        config.market_data.mt5.timeframe = "M1"
+        fake_mt5 = FakeChunkedMT5(total_bars=4)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "history.csv"
+            with patch.object(MT5HistoryCsvExporter, "MAX_BARS_PER_REQUEST", 2):
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "after collecting 4 of 5 bars",
+                ):
+                    MT5HistoryCsvExporter(config, mt5_module=fake_mt5).export_csv(
+                        output_path,
+                        bars=5,
+                    )
+
+            self.assertFalse(output_path.exists())
 
 
 if __name__ == "__main__":

@@ -70,7 +70,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 为什么必须做：
 
 - 现在系统链路已经通了
-- 当前真实阻塞点是 `acceptance_report_ready = false`
+- 当前 branch gate 最新报告已经是 `ready = true`
+- 但“更长样本是否还能站住”还没有验证完
 - 不先复验更长样本，不能进入正式生产决策
 
 完成标准：
@@ -89,6 +90,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 - `profit_factor`
 - `walk_forward_positive_window_rate`
 - `session_profit_concentration`
+
+当前额外注意：
+
+- Windows VPS 上这台 MT5 终端目前只稳定暴露约 `100000` 根 `M1` 历史
+- 如果继续请求更长历史，宿主机侧需要先补“更多历史加载”能力，再继续复验
 
 ### 3. 继续收缩当前候选策略，而不是放宽门槛
 

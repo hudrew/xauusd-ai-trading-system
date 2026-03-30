@@ -57,6 +57,12 @@
 
 - `reports/research_pullback_sell_v3`
 
+如果你准备先拉更长的 MT5 历史再复跑验收，当前要注意一个现实限制：
+
+- 这台 Windows VPS 上的 MT5 终端当前只稳定暴露约 `100000` 根 `M1` 历史
+- 如果导出器提示“after collecting X of Y bars”，说明不是策略报错，而是宿主机终端还没加载够历史
+- 这种情况下要先在 MT5 终端侧补更多历史，再重新导出
+
 ### 2. 导出一份可传输 JSON
 
 ```bash
