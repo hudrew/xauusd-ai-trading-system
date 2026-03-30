@@ -2,7 +2,7 @@
 
 更新时间：
 
-- `2026-03-30`
+- `2026-03-31`
 
 适用范围：
 
@@ -94,6 +94,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 当前额外注意：
 
 - Windows VPS 上这台 MT5 终端目前只稳定暴露约 `100000` 根 `M1` 历史
+- `2026-03-31` 实测 `probe` 结果：
+  - `bars_available = 100000`
+  - `oldest_timestamp = 2025-12-15T18:54:00+00:00`
+  - `newest_timestamp = 2026-03-30T19:39:00+00:00`
+  - `stopped_reason = (-1, 'Terminal: Call failed')`
 - 如果继续请求更长历史，宿主机侧需要先补“更多历史加载”能力，再继续复验
 - 复验时优先走 `probe` 报告目录，避免覆盖当前纸盘正在使用的正式 latest
 - 当前可直接使用：

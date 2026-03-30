@@ -61,6 +61,11 @@
 
 - 这台 Windows VPS 上的 MT5 终端当前只稳定暴露约 `100000` 根 `M1` 历史
 - 如果导出器提示“after collecting X of Y bars”，说明不是策略报错，而是宿主机终端还没加载够历史
+- `2026-03-31` 实测 `probe` 结果：
+  - `bars_available = 100000`
+  - `oldest_timestamp = 2025-12-15T18:54:00+00:00`
+  - `newest_timestamp = 2026-03-30T19:39:00+00:00`
+  - `stopped_reason = (-1, 'Terminal: Call failed')`
 - 这种情况下要先在 MT5 终端侧补更多历史，再重新导出
 - 可以优先检查 MT5 里的 `Tools -> Options -> Charts`
 - 重点看：
