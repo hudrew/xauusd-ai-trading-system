@@ -45,6 +45,13 @@
 - 主任务 `Running`
 - 监控任务 `Running`
 - 监控页公网入口可访问
+- `daily_check` 自动归档任务已注册并开始轮询
+- 最新实测：
+  - 任务名：`xauusd-ai-paper-mt5-paper-pullback-sell-v3-daily-check`
+  - `health = ok`
+  - `last_task_result = 0`
+  - `latest.json` 已持续写入
+  - `summary_runtime_status = healthy`
 
 完成标准：
 
@@ -62,6 +69,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_archive.ps1 .env.mt5.local
+```
+
+当前自动归档任务入口：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_register_task.ps1 .env.mt5.local -StartAfterRegister
+```
+
+状态查看：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_task_status.ps1 .env.mt5.local
 ```
 
 ### 2. 继续扩展样本，但放到研究机跑，不要压 VPS
