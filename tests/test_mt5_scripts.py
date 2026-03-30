@@ -175,9 +175,11 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
     def test_monitoring_autostart_scripts_exist(self) -> None:
         relative_paths = (
             "scripts/mt5_monitoring_export_loop.ps1",
+            "scripts/mt5_monitoring_recover.ps1",
             "scripts/mt5_monitoring_register_tasks.ps1",
             "scripts/mt5_monitoring_unregister_tasks.ps1",
             "scripts/mt5_monitoring_task_status.ps1",
+            "scripts/mt5_pullback_sell_v3_monitoring_recover.ps1",
             "scripts/mt5_pullback_sell_v3_monitoring_register_tasks.ps1",
             "scripts/mt5_pullback_sell_v3_monitoring_unregister_tasks.ps1",
             "scripts/mt5_pullback_sell_v3_monitoring_task_status.ps1",
@@ -189,7 +191,9 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         register_content = (ROOT / "scripts/mt5_monitoring_register_tasks.ps1").read_text(encoding="utf-8")
         export_loop_content = (ROOT / "scripts/mt5_monitoring_export_loop.ps1").read_text(encoding="utf-8")
         status_content = (ROOT / "scripts/mt5_monitoring_task_status.ps1").read_text(encoding="utf-8")
+        recover_content = (ROOT / "scripts/mt5_monitoring_recover.ps1").read_text(encoding="utf-8")
         wrapper_register_content = (ROOT / "scripts/mt5_pullback_sell_v3_monitoring_register_tasks.ps1").read_text(encoding="utf-8")
+        wrapper_recover_content = (ROOT / "scripts/mt5_pullback_sell_v3_monitoring_recover.ps1").read_text(encoding="utf-8")
 
         self.assertIn("Register-ScheduledTask", register_content)
         self.assertIn("Get-DefaultMt5MonitoringTaskName", register_content)
@@ -198,7 +202,11 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn('"export-html"', export_loop_content)
         self.assertIn("dashboard_path:", status_content)
         self.assertIn("Get-ScheduledTaskInfo", status_content)
+        self.assertIn("Invoke-WebRequest", recover_content)
+        self.assertIn("Stop-ScheduledTask", recover_content)
+        self.assertIn("Get-NetTCPConnection", recover_content)
         self.assertIn("configs\\mt5_paper_pullback_sell_v3.yaml", wrapper_register_content)
+        self.assertIn("mt5_monitoring_recover.ps1", wrapper_recover_content)
 
 
 if __name__ == "__main__":
