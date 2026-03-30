@@ -1,5 +1,9 @@
 # Pullback Sell V3 Windows VPS 纸盘落地清单
 
+如果你只是做日常值守、看监控页、恢复页面或检查任务状态，优先看这份更短的速查手册：
+
+- `docs/implementation/pullback_sell_v3_daily_ops_quickstart.md`
+
 ## 适用范围
 
 这份清单只针对当前这条候选分支：

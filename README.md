@@ -41,6 +41,7 @@ cd xauusd-ai-trading-system
 - `docs/implementation/china_user_host_provider_options.md`：面向中国用户的临时 Windows 宿主机选型建议
 - `docs/implementation/azure_windows_temporary_host_quickstart.md`：没有 Windows 机器时，先用 Azure 临时搭 MT5 执行宿主机
 - `docs/implementation/mt5_host_procurement_backlog.md`：宿主机采购延期记录，后续恢复时直接从这里继续
+- `docs/implementation/pullback_sell_v3_daily_ops_quickstart.md`：当前 pullback sell v3 候选线的 VPS 日常值守速查手册
 - `configs/mvp.yaml`：当前默认配置
 - `src/xauusd_ai_system/`：核心业务、运行时、回测、执行、行情适配
 - `examples/`：最小示例与历史回放入口
