@@ -197,6 +197,47 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_task_sta
 - Windows Server 2019 上计划任务注册使用 `Interactive` 登录类型
 - 任务运行器已改成子进程日志收集，避免把普通 Python 输出误判成失败
 
+### 监控页
+
+如果你想直接看页面，不想只盯终端日志，现在可以直接导出或启动只读监控面板。
+
+导出静态 HTML：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_dashboard.ps1 .env.mt5.local
+```
+
+默认会输出到：
+
+- `var\xauusd_ai\dashboards\mt5-paper-pullback-sell-v3.html`
+
+直接启动只读 HTTP 页面：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_dashboard.ps1 .env.mt5.local -Serve -Host 0.0.0.0 -Port 8765
+```
+
+启动后可访问：
+
+- `http://<VPS-IP>:8765/`
+- `http://<VPS-IP>:8765/api/snapshot`
+- `http://<VPS-IP>:8765/health`
+
+这个监控页当前会展示：
+
+- 最近决策
+- 最近高波动预警
+- 最近执行尝试
+- 最新决策时间和是否 stale
+- 风险拦截率
+- 状态 / 波动 / 时段 / 策略分布
+
+安全提醒：
+
+- 这是只读监控页，不会下单
+- 但默认没有鉴权，建议只在 VPS 内网、堡垒机或临时开放端口场景下使用
+- 如果对公网开放，请至少配合 Windows 防火墙白名单或反向代理鉴权
+
 如果需要移除：
 
 ```powershell

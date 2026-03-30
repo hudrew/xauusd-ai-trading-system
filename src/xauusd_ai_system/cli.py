@@ -496,6 +496,106 @@ def _run_deploy_gate(
     return report.ready
 
 
+def _run_monitoring_snapshot(
+    config: SystemConfig,
+    *,
+    database_url: str | None,
+    decision_limit: int,
+    execution_limit: int,
+    stale_after_seconds: int,
+) -> None:
+    from .monitoring.render import serialize_monitoring_snapshot
+    from .monitoring.service import MonitoringSnapshotService
+
+    snapshot = MonitoringSnapshotService(
+        database_url or config.database.url
+    ).build_snapshot(
+        decision_limit=decision_limit,
+        execution_limit=execution_limit,
+        stale_after_seconds=stale_after_seconds,
+    )
+    print(serialize_monitoring_snapshot(snapshot))
+
+
+def _run_monitoring_export_html(
+    config: SystemConfig,
+    *,
+    output_path: str,
+    database_url: str | None,
+    decision_limit: int,
+    execution_limit: int,
+    stale_after_seconds: int,
+    refresh_seconds: int,
+    title: str | None,
+) -> None:
+    from .monitoring.render import render_monitoring_dashboard
+    from .monitoring.service import MonitoringSnapshotService
+
+    snapshot = MonitoringSnapshotService(
+        database_url or config.database.url
+    ).build_snapshot(
+        decision_limit=decision_limit,
+        execution_limit=execution_limit,
+        stale_after_seconds=stale_after_seconds,
+    )
+    resolved_title = title or config.runtime.service_name
+    html_content = render_monitoring_dashboard(
+        snapshot,
+        title=resolved_title,
+        refresh_seconds=refresh_seconds,
+    )
+    target_path = Path(output_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(html_content, encoding="utf-8")
+    print(
+        json.dumps(
+            {
+                "exported": True,
+                "output_path": str(target_path),
+                "database_url": database_url or config.database.url,
+                "title": resolved_title,
+                "decision_limit": decision_limit,
+                "execution_limit": execution_limit,
+                "stale_after_seconds": stale_after_seconds,
+                "refresh_seconds": refresh_seconds,
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+
+
+def _run_monitoring_serve(
+    config: SystemConfig,
+    *,
+    host: str,
+    port: int,
+    decision_limit: int,
+    execution_limit: int,
+    stale_after_seconds: int,
+    refresh_seconds: int,
+    title: str | None,
+) -> None:
+    from .monitoring.server import serve_monitoring_dashboard
+
+    runtime_config = config
+    if title is None and runtime_config.runtime.service_name:
+        resolved_title = runtime_config.runtime.service_name
+    else:
+        resolved_title = title or "xauusd-ai-monitoring"
+
+    serve_monitoring_dashboard(
+        runtime_config,
+        host=host,
+        port=port,
+        title=resolved_title,
+        decision_limit=decision_limit,
+        execution_limit=execution_limit,
+        stale_after_seconds=stale_after_seconds,
+        refresh_seconds=refresh_seconds,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="XAUUSD AI quant trading system CLI")
     parser.add_argument(
@@ -936,6 +1036,91 @@ def main() -> None:
         action="store_false",
         help="Skip preflight for this run.",
     )
+    monitoring_parser = subparsers.add_parser(
+        "monitoring",
+        help="Inspect the audit database and expose a lightweight monitoring view.",
+    )
+    monitoring_subparsers = monitoring_parser.add_subparsers(dest="monitoring_command")
+    monitoring_snapshot_parser = monitoring_subparsers.add_parser(
+        "snapshot",
+        help="Emit a structured monitoring snapshot as JSON.",
+    )
+    monitoring_export_parser = monitoring_subparsers.add_parser(
+        "export-html",
+        help="Render a static HTML monitoring dashboard from the audit database.",
+    )
+    monitoring_serve_parser = monitoring_subparsers.add_parser(
+        "serve",
+        help="Start a read-only HTTP monitoring dashboard.",
+    )
+
+    for subparser in (
+        monitoring_snapshot_parser,
+        monitoring_export_parser,
+        monitoring_serve_parser,
+    ):
+        subparser.add_argument(
+            "--database-url",
+            default=None,
+            help="Optional sqlite database override. Defaults to config.database.url.",
+        )
+        subparser.add_argument(
+            "--decision-limit",
+            type=int,
+            default=120,
+            help="Number of recent decisions to inspect. Defaults to 120.",
+        )
+        subparser.add_argument(
+            "--execution-limit",
+            type=int,
+            default=40,
+            help="Number of recent execution attempts to inspect. Defaults to 40.",
+        )
+        subparser.add_argument(
+            "--stale-after-seconds",
+            type=int,
+            default=120,
+            help="Mark runtime stale when the latest decision is older than this threshold.",
+        )
+
+    monitoring_export_parser.add_argument(
+        "output_path",
+        help="Path to the HTML file to write.",
+    )
+    monitoring_export_parser.add_argument(
+        "--title",
+        default=None,
+        help="Optional dashboard title. Defaults to runtime.service_name.",
+    )
+    monitoring_export_parser.add_argument(
+        "--refresh-seconds",
+        type=int,
+        default=15,
+        help="Client-side auto-refresh interval embedded into the HTML page.",
+    )
+
+    monitoring_serve_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Bind host for the HTTP server. Defaults to 127.0.0.1.",
+    )
+    monitoring_serve_parser.add_argument(
+        "--port",
+        type=int,
+        default=8765,
+        help="Bind port for the HTTP server. Defaults to 8765.",
+    )
+    monitoring_serve_parser.add_argument(
+        "--title",
+        default=None,
+        help="Optional dashboard title. Defaults to runtime.service_name.",
+    )
+    monitoring_serve_parser.add_argument(
+        "--refresh-seconds",
+        type=int,
+        default=15,
+        help="Client-side auto-refresh interval. Defaults to 15.",
+    )
 
     args = parser.parse_args()
     config = _load_cli_config(args.config)
@@ -1081,6 +1266,50 @@ def main() -> None:
         if args.strict and not ready:
             raise SystemExit(2)
         return
+    if args.command == "monitoring":
+        monitoring_database_url = getattr(args, "database_url", None)
+        monitoring_decision_limit = getattr(args, "decision_limit", 120)
+        monitoring_execution_limit = getattr(args, "execution_limit", 40)
+        monitoring_stale_after_seconds = getattr(args, "stale_after_seconds", 120)
+
+        if args.monitoring_command in {None, "snapshot"}:
+            _run_monitoring_snapshot(
+                config,
+                database_url=monitoring_database_url,
+                decision_limit=monitoring_decision_limit,
+                execution_limit=monitoring_execution_limit,
+                stale_after_seconds=monitoring_stale_after_seconds,
+            )
+            return
+        if args.monitoring_command == "export-html":
+            _run_monitoring_export_html(
+                config,
+                output_path=args.output_path,
+                database_url=monitoring_database_url,
+                decision_limit=monitoring_decision_limit,
+                execution_limit=monitoring_execution_limit,
+                stale_after_seconds=monitoring_stale_after_seconds,
+                refresh_seconds=args.refresh_seconds,
+                title=args.title,
+            )
+            return
+        if args.monitoring_command == "serve":
+            if monitoring_database_url:
+                config = replace(
+                    config,
+                    database=replace(config.database, url=monitoring_database_url),
+                )
+            _run_monitoring_serve(
+                config,
+                host=args.host,
+                port=args.port,
+                decision_limit=monitoring_decision_limit,
+                execution_limit=monitoring_execution_limit,
+                stale_after_seconds=monitoring_stale_after_seconds,
+                refresh_seconds=args.refresh_seconds,
+                title=args.title,
+            )
+            return
     raise SystemExit(f"Unsupported command: {args.command}")
 
 

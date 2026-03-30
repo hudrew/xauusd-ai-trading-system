@@ -140,6 +140,22 @@ cd xauusd-ai-trading-system
 - 可以直接做研究复盘
 - 后面接部署门禁或轻量后台时可以直接复用
 
+当前还新增了轻量监控面板链：
+
+- `xauusd_ai_system.cli monitoring snapshot`
+  直接读取 SQLite 审计库，输出最近决策 / 波动预警 / 执行尝试 / 新鲜度状态
+- `xauusd_ai_system.cli monitoring export-html`
+  直接导出只读 HTML 面板
+- `xauusd_ai_system.cli monitoring serve`
+  启一个轻量只读 HTTP 页面，适合先挂在 Windows VPS 内部观察
+
+这层当前的定位很明确：
+
+- 不参与交易决策
+- 不改交易链路
+- 只读审计库
+- 用来做运行观察、风控复盘和高波动预警可视化
+
 当前还新增了统一上线门禁入口：
 
 - `xauusd_ai_system.cli deploy-gate`
