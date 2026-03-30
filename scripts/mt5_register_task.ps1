@@ -82,7 +82,7 @@ $settings = New-ScheduledTaskSettingsSet `
     -ExecutionTimeLimit (New-TimeSpan -Days 3650)
 $principal = New-ScheduledTaskPrincipal `
     -UserId $resolvedUserId `
-    -LogonType InteractiveToken `
+    -LogonType Interactive `
     -RunLevel Highest
 
 $description = "XAUUSD AI $Mode loop with deploy-gate, preflight and task logging."
