@@ -27,12 +27,20 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "_mt5_common.ps1")
 
-function ConvertTo-SingleQuotedLiteral {
+function ConvertTo-ArgumentToken {
     param(
         [string]$Value
     )
 
-    return "'{0}'" -f $Value.Replace("'", "''")
+    if ($null -eq $Value) {
+        return '""'
+    }
+
+    if ($Value -notmatch '[\s"]') {
+        return $Value
+    }
+
+    return '"' + $Value.Replace('"', '\"') + '"'
 }
 
 Ensure-Venv
@@ -72,79 +80,78 @@ Ensure-Directory -PathValue (Split-Path -Parent $resolvedServeLogPath) | Out-Nul
 Ensure-Directory -PathValue (Split-Path -Parent $resolvedRefreshLogPath) | Out-Null
 
 $powershellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-$serveScriptPath = Join-Path $PSScriptRoot "mt5_monitoring_dashboard.ps1"
-$refreshScriptPath = Join-Path $PSScriptRoot "mt5_monitoring_export_loop.ps1"
-
-if (-not (Test-Path $serveScriptPath)) {
-    throw "Monitoring serve script not found: $serveScriptPath"
-}
-if (-not (Test-Path $refreshScriptPath)) {
-    throw "Monitoring refresh script not found: $refreshScriptPath"
+$runnerScriptPath = Join-Path $PSScriptRoot "mt5_monitoring_task_runner.ps1"
+if (-not (Test-Path $runnerScriptPath)) {
+    throw "Monitoring runner script not found: $runnerScriptPath"
 }
 
-$quotedMode = ConvertTo-SingleQuotedLiteral -Value $Mode
-$quotedEnvFile = ConvertTo-SingleQuotedLiteral -Value $resolvedEnvFile
-$quotedConfigPath = ConvertTo-SingleQuotedLiteral -Value $resolvedConfigPath
-$quotedDashboardPath = ConvertTo-SingleQuotedLiteral -Value $resolvedDashboardPath
-$quotedBindHost = ConvertTo-SingleQuotedLiteral -Value $BindHost
-$quotedServeLogPath = ConvertTo-SingleQuotedLiteral -Value $resolvedServeLogPath
-$quotedRefreshLogPath = ConvertTo-SingleQuotedLiteral -Value $resolvedRefreshLogPath
-$quotedServeScriptPath = ConvertTo-SingleQuotedLiteral -Value $serveScriptPath
-$quotedRefreshScriptPath = ConvertTo-SingleQuotedLiteral -Value $refreshScriptPath
-
-$titleArgs = ""
+$serveArguments = @(
+    "-NoProfile"
+    "-ExecutionPolicy"
+    "Bypass"
+    "-File"
+    $runnerScriptPath
+    "-Mode"
+    $Mode
+    "-Role"
+    "serve"
+    "-EnvFile"
+    $resolvedEnvFile
+    "-ConfigPath"
+    $resolvedConfigPath
+    "-DashboardPath"
+    $resolvedDashboardPath
+    "-BindHost"
+    $BindHost
+    "-Port"
+    "$Port"
+    "-DecisionLimit"
+    "$DecisionLimit"
+    "-ExecutionLimit"
+    "$ExecutionLimit"
+    "-StaleAfterSeconds"
+    "$StaleAfterSeconds"
+    "-RefreshSeconds"
+    "$RefreshSeconds"
+    "-LogPath"
+    $resolvedServeLogPath
+)
 if (-not [string]::IsNullOrWhiteSpace($Title)) {
-    $titleArgs = " -Title {0}" -f (ConvertTo-SingleQuotedLiteral -Value $Title)
+    $serveArguments += @("-Title", $Title)
 }
 
-$serveCommand = (
-    "& {0} -Mode {1} -EnvFile {2} -ConfigPath {3} -OutputPath {4} -Serve -BindHost {5} -Port {6} -DecisionLimit {7} -ExecutionLimit {8} -StaleAfterSeconds {9} -RefreshSeconds {10}{11} *>> {12}" -f
-    $quotedServeScriptPath,
-    $quotedMode,
-    $quotedEnvFile,
-    $quotedConfigPath,
-    $quotedDashboardPath,
-    $quotedBindHost,
-    $Port,
-    $DecisionLimit,
-    $ExecutionLimit,
-    $StaleAfterSeconds,
-    $RefreshSeconds,
-    $titleArgs,
-    $quotedServeLogPath
-)
-
-$refreshCommand = (
-    "& {0} -Mode {1} -EnvFile {2} -ConfigPath {3} -OutputPath {4} -IntervalSeconds {5} -DecisionLimit {6} -ExecutionLimit {7} -StaleAfterSeconds {8} -RefreshSeconds {9}{10} *>> {11}" -f
-    $quotedRefreshScriptPath,
-    $quotedMode,
-    $quotedEnvFile,
-    $quotedConfigPath,
-    $quotedDashboardPath,
-    [Math]::Max($SnapshotIntervalSeconds, 15),
-    $DecisionLimit,
-    $ExecutionLimit,
-    $StaleAfterSeconds,
-    $RefreshSeconds,
-    $titleArgs,
-    $quotedRefreshLogPath
-)
-
-$serveArgumentString = @(
+$refreshArguments = @(
     "-NoProfile"
     "-ExecutionPolicy"
     "Bypass"
-    "-Command"
-    ('"{0}"' -f $serveCommand)
-) -join " "
-
-$refreshArgumentString = @(
-    "-NoProfile"
-    "-ExecutionPolicy"
-    "Bypass"
-    "-Command"
-    ('"{0}"' -f $refreshCommand)
-) -join " "
+    "-File"
+    $runnerScriptPath
+    "-Mode"
+    $Mode
+    "-Role"
+    "refresh"
+    "-EnvFile"
+    $resolvedEnvFile
+    "-ConfigPath"
+    $resolvedConfigPath
+    "-DashboardPath"
+    $resolvedDashboardPath
+    "-DecisionLimit"
+    "$DecisionLimit"
+    "-ExecutionLimit"
+    "$ExecutionLimit"
+    "-StaleAfterSeconds"
+    "$StaleAfterSeconds"
+    "-RefreshSeconds"
+    "$RefreshSeconds"
+    "-IntervalSeconds"
+    "$([Math]::Max($SnapshotIntervalSeconds, 15))"
+    "-LogPath"
+    $resolvedRefreshLogPath
+)
+if (-not [string]::IsNullOrWhiteSpace($Title)) {
+    $refreshArguments += @("-Title", $Title)
+}
 
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $resolvedUserId
 $settings = New-ScheduledTaskSettingsSet `
@@ -162,11 +169,11 @@ $principal = New-ScheduledTaskPrincipal `
 
 $serveAction = New-ScheduledTaskAction `
     -Execute $powershellExe `
-    -Argument $serveArgumentString `
+    -Argument (($serveArguments | ForEach-Object { ConvertTo-ArgumentToken -Value ([string]$_) }) -join " ") `
     -WorkingDirectory $Script:RootDir
 $refreshAction = New-ScheduledTaskAction `
     -Execute $powershellExe `
-    -Argument $refreshArgumentString `
+    -Argument (($refreshArguments | ForEach-Object { ConvertTo-ArgumentToken -Value ([string]$_) }) -join " ") `
     -WorkingDirectory $Script:RootDir
 
 Register-ScheduledTask `
