@@ -68,6 +68,19 @@
   - `Max. bars in history`
 - 如果改完还没生效，再重启一次 MT5 终端后重试导出
 
+建议先跑历史容量探针，再决定要不要直接导出：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_probe_history_capacity.ps1 .env.mt5.local --batch-size 50000 --max-bars 300000
+```
+
+这条命令会直接告诉你：
+
+- 当前 MT5 终端到底能读出多少根 bar
+- 最老时间戳到哪里
+- 最新时间戳到哪里
+- 是“已经探到边界”，还是只是碰到了本次 probe 的上限
+
 如果你只是想先做“更长样本 probe 复验”，不想覆盖当前纸盘正在使用的正式 `latest`，优先改用：
 
 ```bash

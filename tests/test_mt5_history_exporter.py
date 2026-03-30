@@ -196,6 +196,43 @@ class MT5HistoryCsvExporterTests(unittest.TestCase):
 
             self.assertFalse(output_path.exists())
 
+    def test_probe_capacity_reports_exact_available_history(self) -> None:
+        config = SystemConfig()
+        config.market_data.platform = "mt5"
+        config.execution.platform = "mt5"
+        config.market_data.mt5.timeframe = "M1"
+        fake_mt5 = FakeChunkedMT5(total_bars=5)
+
+        with patch.object(MT5HistoryCsvExporter, "MAX_BARS_PER_REQUEST", 2):
+            result = MT5HistoryCsvExporter(config, mt5_module=fake_mt5).probe_capacity(
+                batch_size=2,
+                max_bars=10,
+            )
+
+        self.assertEqual(result.bars_available, 5)
+        self.assertEqual(result.batches_loaded, 3)
+        self.assertTrue(result.probe_complete)
+        self.assertEqual(result.oldest_timestamp, "2024-03-29T17:00:00+00:00")
+        self.assertEqual(result.newest_timestamp, "2024-03-29T17:04:00+00:00")
+        self.assertEqual(result.stopped_reason, "requested batch_size=2, returned=1")
+
+    def test_probe_capacity_marks_limit_reached_when_probe_cap_hits(self) -> None:
+        config = SystemConfig()
+        config.market_data.platform = "mt5"
+        config.execution.platform = "mt5"
+        config.market_data.mt5.timeframe = "M1"
+        fake_mt5 = FakeChunkedMT5(total_bars=20)
+
+        result = MT5HistoryCsvExporter(config, mt5_module=fake_mt5).probe_capacity(
+            batch_size=5,
+            max_bars=10,
+        )
+
+        self.assertEqual(result.bars_available, 10)
+        self.assertEqual(result.batches_loaded, 2)
+        self.assertFalse(result.probe_complete)
+        self.assertEqual(result.stopped_reason, "probe_limit_reached max_bars=10")
+
 
 if __name__ == "__main__":
     unittest.main()

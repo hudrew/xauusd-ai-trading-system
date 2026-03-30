@@ -99,6 +99,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 - 当前可直接使用：
   - `scripts/research_pullback_sell_v3_refresh_probe.sh`
   - `scripts/research_pullback_sell_v3_refresh_probe.ps1`
+  - `scripts/mt5_probe_history_capacity.sh`
+  - `scripts/mt5_probe_history_capacity.ps1`
 
 ### 3. 继续收缩当前候选策略，而不是放宽门槛
 

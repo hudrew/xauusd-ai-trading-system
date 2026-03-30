@@ -40,11 +40,17 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
     def test_export_history_scripts_exist(self) -> None:
         shell_script = ROOT / "scripts/mt5_export_history.sh"
         powershell_script = ROOT / "scripts/mt5_export_history.ps1"
+        probe_shell_script = ROOT / "scripts/mt5_probe_history_capacity.sh"
+        probe_powershell_script = ROOT / "scripts/mt5_probe_history_capacity.ps1"
 
         self.assertTrue(shell_script.exists())
         self.assertTrue(powershell_script.exists())
+        self.assertTrue(probe_shell_script.exists())
+        self.assertTrue(probe_powershell_script.exists())
         self.assertIn("export-mt5-history", shell_script.read_text(encoding="utf-8"))
         self.assertIn('"export-mt5-history"', powershell_script.read_text(encoding="utf-8"))
+        self.assertIn("probe-mt5-history", probe_shell_script.read_text(encoding="utf-8"))
+        self.assertIn('"probe-mt5-history"', probe_powershell_script.read_text(encoding="utf-8"))
 
     def test_powershell_task_registration_scripts_exist(self) -> None:
         register_script = ROOT / "scripts/mt5_register_task.ps1"

@@ -470,6 +470,25 @@ def _run_export_mt5_history(
     print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))
 
 
+def _run_probe_mt5_history(
+    config: SystemConfig,
+    *,
+    symbol: str | None,
+    timeframe: str | None,
+    batch_size: int | None,
+    max_bars: int | None,
+) -> None:
+    from .data.mt5_history_exporter import MT5HistoryCsvExporter
+
+    result = MT5HistoryCsvExporter(config).probe_capacity(
+        symbol=symbol,
+        timeframe=timeframe,
+        batch_size=batch_size,
+        max_bars=max_bars,
+    )
+    print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))
+
+
 def _run_deploy_gate(
     config: SystemConfig,
     *,
@@ -978,6 +997,32 @@ def main() -> None:
         default=20000,
         help="Number of most recent bars to export. Defaults to 20000.",
     )
+    probe_mt5_parser = subparsers.add_parser(
+        "probe-mt5-history",
+        help="Inspect how many recent MT5 bars are currently accessible from the terminal.",
+    )
+    probe_mt5_parser.add_argument(
+        "--symbol",
+        default=None,
+        help="Optional MT5 symbol override. Defaults to config symbol.",
+    )
+    probe_mt5_parser.add_argument(
+        "--timeframe",
+        default=None,
+        help="Optional MT5 timeframe override such as M1/M5/M15/H1. Defaults to config timeframe.",
+    )
+    probe_mt5_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=50000,
+        help="Bars to request per MT5 probe call. Defaults to 50000.",
+    )
+    probe_mt5_parser.add_argument(
+        "--max-bars",
+        type=int,
+        default=500000,
+        help="Maximum bars to probe before stopping. Defaults to 500000.",
+    )
     deploy_gate_parser = subparsers.add_parser(
         "deploy-gate",
         help="Run research acceptance and live readiness checks as a single deployment gate.",
@@ -1251,6 +1296,15 @@ def main() -> None:
             symbol=args.symbol,
             timeframe=args.timeframe,
             bars=args.bars,
+        )
+        return
+    if args.command == "probe-mt5-history":
+        _run_probe_mt5_history(
+            config,
+            symbol=args.symbol,
+            timeframe=args.timeframe,
+            batch_size=args.batch_size,
+            max_bars=args.max_bars,
         )
         return
     if args.command == "deploy-gate":
