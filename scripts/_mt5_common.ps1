@@ -297,6 +297,102 @@ function Ensure-Directory {
     return $resolvedPath
 }
 
+function Get-Mt5LoopProcesses {
+    param(
+        [ValidateSet("paper", "prod")]
+        [string]$Mode = $(if ($env:XAUUSD_AI_ENV -eq "prod") { "prod" } else { "paper" }),
+        [string]$ConfigPath
+    )
+
+    $resolvedConfigPath = Resolve-Mt5Config -Mode $Mode -ConfigPath $ConfigPath
+    $loopScriptName = if ($Mode -eq "prod") { "mt5_prod_loop.ps1" } else { "mt5_paper_loop.ps1" }
+    $loopScriptPath = Join-Path $PSScriptRoot $loopScriptName
+    $runnerScriptPath = Join-Path $PSScriptRoot "mt5_task_runner.ps1"
+    $configPattern = [regex]::Escape($resolvedConfigPath)
+    $loopPattern = [regex]::Escape($loopScriptPath)
+    $runnerPattern = [regex]::Escape($runnerScriptPath)
+
+    return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $commandLine = [string]$_.CommandLine
+            if ([string]::IsNullOrWhiteSpace($commandLine)) {
+                return $false
+            }
+
+            if ($commandLine -notmatch $configPattern) {
+                return $false
+            }
+
+            if ($commandLine -match $runnerPattern -or $commandLine -match $loopPattern) {
+                return $true
+            }
+
+            return (
+                $commandLine -match "xauusd_ai_system\.cli" -and
+                $commandLine -match "(^|\s)live-loop(\s|$)"
+            )
+        })
+}
+
+function Stop-Mt5LoopProcesses {
+    param(
+        [ValidateSet("paper", "prod")]
+        [string]$Mode = $(if ($env:XAUUSD_AI_ENV -eq "prod") { "prod" } else { "paper" }),
+        [string]$ConfigPath
+    )
+
+    $allProcesses = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    if ($allProcesses.Count -eq 0) {
+        return @()
+    }
+
+    $matchingProcesses = @(Get-Mt5LoopProcesses -Mode $Mode -ConfigPath $ConfigPath)
+    if ($matchingProcesses.Count -eq 0) {
+        return @()
+    }
+
+    $targetIds = @($matchingProcesses | Select-Object -ExpandProperty ProcessId -Unique)
+    $hasChanges = $true
+    while ($hasChanges) {
+        $hasChanges = $false
+        foreach ($process in $allProcesses) {
+            if ($targetIds -contains $process.ProcessId) {
+                continue
+            }
+
+            if ($targetIds -contains $process.ParentProcessId) {
+                $targetIds += $process.ProcessId
+                $hasChanges = $true
+            }
+        }
+
+        if ($hasChanges) {
+            $targetIds = @($targetIds | Sort-Object -Unique)
+        }
+    }
+
+    $processesToStop = @($allProcesses |
+        Where-Object { $targetIds -contains $_.ProcessId } |
+        Sort-Object CreationDate -Descending)
+    $stoppedProcesses = @()
+    foreach ($process in $processesToStop) {
+        try {
+            Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop
+            $stoppedProcesses += [PSCustomObject]@{
+                Name = $process.Name
+                ProcessId = $process.ProcessId
+                ParentProcessId = $process.ParentProcessId
+                CreationDate = $process.CreationDate
+            }
+        }
+        catch {
+            # Process may have already exited during tree shutdown.
+        }
+    }
+
+    return $stoppedProcesses
+}
+
 function Get-LatestChildItem {
     param(
         [Parameter(Mandatory = $true)]

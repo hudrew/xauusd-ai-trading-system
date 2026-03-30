@@ -8,6 +8,7 @@ param(
     [int]$RestartCount = 999,
     [int]$RestartIntervalMinutes = 1,
     [switch]$SkipTaskRestart,
+    [switch]$SkipProcessCleanup,
     [switch]$TailLog,
     [int]$TailLines = 20,
     [int]$FreshnessWarningSeconds = 120
@@ -57,6 +58,17 @@ $resolvedTaskName = if ($TaskName) { $TaskName } else { Get-DefaultMt5TaskName -
 
 Stop-ScheduledTaskIfExists -TaskName $resolvedTaskName
 Start-Sleep -Seconds 2
+
+if (-not $SkipProcessCleanup) {
+    $stoppedProcesses = @(Stop-Mt5LoopProcesses -Mode $Mode -ConfigPath $resolvedConfigPath)
+    foreach ($process in $stoppedProcesses) {
+        Write-Host ("loop_process_stopped: pid={0} parent={1} name={2}" -f $process.ProcessId, $process.ParentProcessId, $process.Name)
+    }
+
+    if ($stoppedProcesses.Count -gt 0) {
+        Start-Sleep -Seconds 2
+    }
+}
 
 if (-not $SkipTaskRestart) {
     $registerScriptPath = Join-Path $PSScriptRoot "mt5_register_task.ps1"
