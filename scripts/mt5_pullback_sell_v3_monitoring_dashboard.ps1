@@ -2,7 +2,8 @@ param(
     [Parameter(Position = 0)]
     [string]$EnvFile,
     [string]$OutputPath,
-    [string]$Host = "127.0.0.1",
+    [Alias("Host")]
+    [string]$BindHost = "127.0.0.1",
     [int]$Port = 8765,
     [int]$DecisionLimit = 120,
     [int]$ExecutionLimit = 40,
@@ -21,7 +22,7 @@ $scriptPath = Join-Path $PSScriptRoot "mt5_monitoring_dashboard.ps1"
     -EnvFile $EnvFile `
     -ConfigPath "configs\mt5_paper_pullback_sell_v3.yaml" `
     -OutputPath $OutputPath `
-    -Host $Host `
+    -BindHost $BindHost `
     -Port $Port `
     -DecisionLimit $DecisionLimit `
     -ExecutionLimit $ExecutionLimit `

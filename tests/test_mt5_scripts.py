@@ -155,6 +155,23 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn("report-export", powershell_content)
         self.assertIn("research_pullback_sell_v3_acceptance_latest.json", powershell_content)
 
+    def test_monitoring_dashboard_scripts_avoid_host_variable_collision(self) -> None:
+        base_script = ROOT / "scripts/mt5_monitoring_dashboard.ps1"
+        wrapper_script = ROOT / "scripts/mt5_pullback_sell_v3_monitoring_dashboard.ps1"
+
+        self.assertTrue(base_script.exists())
+        self.assertTrue(wrapper_script.exists())
+
+        base_content = base_script.read_text(encoding="utf-8")
+        wrapper_content = wrapper_script.read_text(encoding="utf-8")
+
+        self.assertIn('[Alias("Host")]', base_content)
+        self.assertIn('[Alias("Host")]', wrapper_content)
+        self.assertIn("$BindHost", base_content)
+        self.assertIn("$BindHost", wrapper_content)
+        self.assertIn('"monitoring"', base_content)
+        self.assertIn("mt5_monitoring_dashboard.ps1", wrapper_content)
+
 
 if __name__ == "__main__":
     unittest.main()

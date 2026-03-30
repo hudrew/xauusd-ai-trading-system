@@ -4,7 +4,8 @@ param(
     [string]$EnvFile,
     [string]$ConfigPath,
     [string]$OutputPath,
-    [string]$Host = "127.0.0.1",
+    [Alias("Host")]
+    [string]$BindHost = "127.0.0.1",
     [int]$Port = 8765,
     [int]$DecisionLimit = 120,
     [int]$ExecutionLimit = 40,
@@ -51,7 +52,7 @@ if ($Serve) {
     $cliArgs += @(
         "serve"
         "--host"
-        $Host
+        $BindHost
         "--port"
         "$Port"
         "--decision-limit"
