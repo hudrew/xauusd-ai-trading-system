@@ -13,14 +13,29 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $scriptPath = Join-Path $PSScriptRoot "mt5_register_task.ps1"
-& $scriptPath `
-    -Mode "paper" `
-    -EnvFile $EnvFile `
-    -ConfigPath "configs\mt5_paper_pullback_sell_v3.yaml" `
-    -TaskName $TaskName `
-    -UserId $UserId `
-    -StartAfterRegister:$StartAfterRegister `
-    -Force:$Force `
-    -RestartCount $RestartCount `
-    -RestartIntervalMinutes $RestartIntervalMinutes
+$previousEnvMode = $env:XAUUSD_AI_ENV
 
+try {
+    $env:XAUUSD_AI_ENV = "paper"
+
+    $scriptArgs = @{
+        EnvFile = $EnvFile
+        ConfigPath = "configs\mt5_paper_pullback_sell_v3.yaml"
+        TaskName = $TaskName
+        UserId = $UserId
+        StartAfterRegister = $StartAfterRegister
+        Force = $Force
+        RestartCount = $RestartCount
+        RestartIntervalMinutes = $RestartIntervalMinutes
+    }
+
+    & $scriptPath @scriptArgs
+}
+finally {
+    if ($null -eq $previousEnvMode) {
+        Remove-Item Env:XAUUSD_AI_ENV -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:XAUUSD_AI_ENV = $previousEnvMode
+    }
+}

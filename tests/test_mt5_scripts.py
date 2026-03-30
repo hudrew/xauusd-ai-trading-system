@@ -113,6 +113,24 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
             (ROOT / "scripts/mt5_pullback_sell_v3_unregister_task.ps1").read_text(encoding="utf-8"),
         )
 
+    def test_pullback_sell_v3_wrappers_pin_paper_mode_via_env(self) -> None:
+        relative_paths = (
+            "scripts/mt5_pullback_sell_v3_register_task.ps1",
+            "scripts/mt5_pullback_sell_v3_task_status.ps1",
+            "scripts/mt5_pullback_sell_v3_unregister_task.ps1",
+            "scripts/mt5_pullback_sell_v3_monitoring_dashboard.ps1",
+            "scripts/mt5_pullback_sell_v3_monitoring_recover.ps1",
+            "scripts/mt5_pullback_sell_v3_monitoring_register_tasks.ps1",
+            "scripts/mt5_pullback_sell_v3_monitoring_task_status.ps1",
+            "scripts/mt5_pullback_sell_v3_monitoring_unregister_tasks.ps1",
+        )
+
+        for relative_path in relative_paths:
+            content = (ROOT / relative_path).read_text(encoding="utf-8")
+            self.assertIn('$env:XAUUSD_AI_ENV = "paper"', content, relative_path)
+            self.assertIn("ConfigPath = \"configs\\mt5_paper_pullback_sell_v3.yaml\"", content, relative_path)
+            self.assertNotIn('-Mode "paper"', content, relative_path)
+
     def test_runtime_scripts_support_explicit_config_override(self) -> None:
         shell_common = (ROOT / "scripts/_mt5_common.sh").read_text(encoding="utf-8")
         ps_common = (ROOT / "scripts/_mt5_common.ps1").read_text(encoding="utf-8")
@@ -205,6 +223,9 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn("Invoke-WebRequest", recover_content)
         self.assertIn("Stop-ScheduledTask", recover_content)
         self.assertIn("Get-NetTCPConnection", recover_content)
+        self.assertIn("$registerArgs = @{", recover_content)
+        self.assertIn("$statusArgs = @{", recover_content)
+        self.assertIn('$env:XAUUSD_AI_ENV = $Mode', recover_content)
         self.assertIn("configs\\mt5_paper_pullback_sell_v3.yaml", wrapper_register_content)
         self.assertIn("mt5_monitoring_recover.ps1", wrapper_recover_content)
 

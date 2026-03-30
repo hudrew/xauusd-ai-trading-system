@@ -96,37 +96,40 @@ Stop-PortListeners -Port $Port
 Start-Sleep -Seconds 2
 
 if (-not $SkipTaskRestart) {
-    $registerArgs = @(
-        "-Mode"
-        $Mode
-        "-EnvFile"
-        $resolvedEnvFile
-        "-ConfigPath"
-        $resolvedConfigPath
-        "-DashboardPath"
-        $resolvedDashboardPath
-        "-BindHost"
-        $BindHost
-        "-Port"
-        "$Port"
-        "-DecisionLimit"
-        "$DecisionLimit"
-        "-ExecutionLimit"
-        "$ExecutionLimit"
-        "-StaleAfterSeconds"
-        "$StaleAfterSeconds"
-        "-RefreshSeconds"
-        "$RefreshSeconds"
-        "-SnapshotIntervalSeconds"
-        "$SnapshotIntervalSeconds"
-        "-StartAfterRegister"
-        "-Force"
-    )
+    $registerScriptPath = Join-Path $PSScriptRoot "mt5_monitoring_register_tasks.ps1"
+    $registerArgs = @{
+        EnvFile = $resolvedEnvFile
+        ConfigPath = $resolvedConfigPath
+        DashboardPath = $resolvedDashboardPath
+        BindHost = $BindHost
+        Port = $Port
+        DecisionLimit = $DecisionLimit
+        ExecutionLimit = $ExecutionLimit
+        StaleAfterSeconds = $StaleAfterSeconds
+        RefreshSeconds = $RefreshSeconds
+        SnapshotIntervalSeconds = $SnapshotIntervalSeconds
+        ServeTaskName = $resolvedServeTaskName
+        RefreshTaskName = $resolvedRefreshTaskName
+        StartAfterRegister = $true
+        Force = $true
+    }
     if (-not [string]::IsNullOrWhiteSpace($Title)) {
-        $registerArgs += @("-Title", $Title)
+        $registerArgs.Title = $Title
     }
 
-    & (Join-Path $PSScriptRoot "mt5_monitoring_register_tasks.ps1") @registerArgs
+    $previousEnvMode = $env:XAUUSD_AI_ENV
+    try {
+        $env:XAUUSD_AI_ENV = $Mode
+        & $registerScriptPath @registerArgs
+    }
+    finally {
+        if ($null -eq $previousEnvMode) {
+            Remove-Item Env:XAUUSD_AI_ENV -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:XAUUSD_AI_ENV = $previousEnvMode
+        }
+    }
 }
 
 Start-Sleep -Seconds 5
@@ -143,12 +146,27 @@ catch {
     Write-Host ("health_error: {0}" -f $_.Exception.Message)
 }
 
-& (Join-Path $PSScriptRoot "mt5_monitoring_task_status.ps1") `
-    -Mode $Mode `
-    -EnvFile $resolvedEnvFile `
-    -ConfigPath $resolvedConfigPath `
-    -DashboardPath $resolvedDashboardPath `
-    -ServeTaskName $resolvedServeTaskName `
-    -RefreshTaskName $resolvedRefreshTaskName `
-    -TailLog `
-    -TailLines 20
+$statusScriptPath = Join-Path $PSScriptRoot "mt5_monitoring_task_status.ps1"
+$statusArgs = @{
+    EnvFile = $resolvedEnvFile
+    ConfigPath = $resolvedConfigPath
+    DashboardPath = $resolvedDashboardPath
+    ServeTaskName = $resolvedServeTaskName
+    RefreshTaskName = $resolvedRefreshTaskName
+    TailLog = $true
+    TailLines = 20
+}
+
+$previousEnvMode = $env:XAUUSD_AI_ENV
+try {
+    $env:XAUUSD_AI_ENV = $Mode
+    & $statusScriptPath @statusArgs
+}
+finally {
+    if ($null -eq $previousEnvMode) {
+        Remove-Item Env:XAUUSD_AI_ENV -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:XAUUSD_AI_ENV = $previousEnvMode
+    }
+}
