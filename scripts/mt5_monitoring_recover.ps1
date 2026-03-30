@@ -18,7 +18,8 @@ param(
     [int]$AttentionSyncThreshold = 1,
     [switch]$FailOnAttentionSync,
     [switch]$FailOnRuntimeIssue,
-    [switch]$SkipTaskRestart
+    [switch]$SkipTaskRestart,
+    [switch]$SkipProcessCleanup
 )
 
 Set-StrictMode -Version Latest
@@ -107,6 +108,18 @@ $resolvedRefreshTaskName = if ($RefreshTaskName) { $RefreshTaskName } else { Get
 Stop-ScheduledTaskIfExists -TaskName $resolvedServeTaskName
 Stop-ScheduledTaskIfExists -TaskName $resolvedRefreshTaskName
 Start-Sleep -Seconds 2
+
+if (-not $SkipProcessCleanup) {
+    $stoppedProcesses = @(Stop-Mt5MonitoringProcesses -Mode $Mode -ConfigPath $resolvedConfigPath)
+    foreach ($process in $stoppedProcesses) {
+        Write-Host ("monitoring_process_stopped: pid={0} parent={1} name={2}" -f $process.ProcessId, $process.ParentProcessId, $process.Name)
+    }
+
+    if ($stoppedProcesses.Count -gt 0) {
+        Start-Sleep -Seconds 2
+    }
+}
+
 Stop-PortListeners -Port $Port
 Start-Sleep -Seconds 2
 
