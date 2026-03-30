@@ -62,6 +62,11 @@
 - 这台 Windows VPS 上的 MT5 终端当前只稳定暴露约 `100000` 根 `M1` 历史
 - 如果导出器提示“after collecting X of Y bars”，说明不是策略报错，而是宿主机终端还没加载够历史
 - 这种情况下要先在 MT5 终端侧补更多历史，再重新导出
+- 可以优先检查 MT5 里的 `Tools -> Options -> Charts`
+- 重点看：
+  - `Max. bars in chart`
+  - `Max. bars in history`
+- 如果改完还没生效，再重启一次 MT5 终端后重试导出
 
 ### 2. 导出一份可传输 JSON
 
