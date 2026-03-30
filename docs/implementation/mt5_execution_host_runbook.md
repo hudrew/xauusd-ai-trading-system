@@ -477,6 +477,44 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_unregister_task.ps1 -Mode
 - 优先在已验证可手工登录 MT5 的用户会话下注册任务
 - 如果后续需要更细的服务治理，再评估 `nssm` 或更完整的守护层
 
+## 监控看板任务与恢复
+
+候选分支纸盘当前推荐单独挂监控看板任务，和主交易 loop 解耦：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_register_tasks.ps1 .env.mt5.local -StartAfterRegister
+```
+
+当前默认行为：
+
+- 对应配置固定为 `configs\mt5_paper_pullback_sell_v3.yaml`
+- 默认监听端口是 `80`
+- 会注册两条任务：
+  - `xauusd-ai-paper-mt5-paper-pullback-sell-v3-monitor-serve`
+  - `xauusd-ai-paper-mt5-paper-pullback-sell-v3-monitor-refresh`
+
+查看监控任务状态：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_task_status.ps1 .env.mt5.local -TailLog
+```
+
+如果页面打不开、端口被占、或者怀疑之前手工启动过多条监控进程，优先直接跑恢复：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_recover.ps1 .env.mt5.local
+```
+
+当前补充：
+
+- `mt5_monitoring_recover.ps1` 现在会在重启监控任务前，先清理同配置残留的 `monitoring dashboard / monitoring export loop / export-html` 进程树
+- 这样可以避免旧的手工 `serve` 或旧计划任务继续占着 `80 / 8765 / 8080` 一类端口，导致页面表面能打开、实际不是当前任务在刷新
+- 如果只是想停掉监控任务，可执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_monitoring_unregister_tasks.ps1 .env.mt5.local
+```
+
 ## 失败时先看哪里
 
 ### host-check 不通过
