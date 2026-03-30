@@ -16,6 +16,14 @@ class JsonFormatter(logging.Formatter):
         }
         if hasattr(record, "extra_payload"):
             payload.update(record.extra_payload)
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+            exc = record.exc_info[1]
+            if exc is not None:
+                payload["exception_type"] = type(exc).__name__
+                payload["exception_message"] = str(exc)
+        if record.stack_info:
+            payload["stack_info"] = self.formatStack(record.stack_info)
         return json.dumps(payload, ensure_ascii=False)
 
 
@@ -26,4 +34,3 @@ def configure_logging(level: str = "INFO") -> None:
     handler.setFormatter(JsonFormatter())
     root_logger.addHandler(handler)
     root_logger.setLevel(level.upper())
-
