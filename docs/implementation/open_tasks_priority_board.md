@@ -7,7 +7,7 @@
 适用范围：
 
 - 当前仓库主线
-- 当前已落地的 `MT5 paper pullback sell v3` 候选线
+- 当前已落地的 `MT5 paper pullback sell v4` 候选线
 
 这份文档只回答三个问题：
 
@@ -26,63 +26,92 @@
 - `500000` 根 `M1` 的安全 probe 验收也已在本地研究机通过
 - 当前不再是“最新研究门禁没过”
 - 现在真正要继续收口的是：
-  - 纸盘连续运行稳定性
+  - 本地研究机上的参数扫描与长样本确认
   - 更长样本下的稳健性与成交覆盖率
   - 生产执行闭环
+- `2026-03-31` 用户已明确要求：
+  - 参数扫描固定在本地研究机
+  - 不再等待宿主机参与研究
+- 因此当前 VPS 上以下 pullback v3 相关任务已被停掉并禁用：
+  - `xauusd-ai-paper-mt5-paper-pullback-sell-v3-loop`
+  - `xauusd-ai-paper-mt5-paper-pullback-sell-v3-monitor-serve`
+  - `xauusd-ai-paper-mt5-paper-pullback-sell-v3-monitor-refresh`
+  - `xauusd-ai-paper-mt5-paper-pullback-sell-v3-daily-check`
+- 当前本地研究主候选已经切到：
+  - `configs/mvp_pullback_sell_research_v4.yaml`
+- 对应的 `MT5 paper pullback sell v4` 执行包也已经补齐：
+  - `configs/mt5_paper_pullback_sell_v4.yaml`
+  - `docs/implementation/pullback_sell_v4_vps_paper_runbook.md`
+- `2026-03-31` 同日已完成 VPS 实际切盘：
+  - `xauusd-ai-paper-mt5-paper-pullback-sell-v4-loop`
+  - `xauusd-ai-paper-mt5-paper-pullback-sell-v4-monitor-serve`
+  - `xauusd-ai-paper-mt5-paper-pullback-sell-v4-monitor-refresh`
+  - `xauusd-ai-paper-mt5-paper-pullback-sell-v4-daily-check`
+  当前均已恢复
+- 当前公网入口已经切到 `v4`：
+  - `http://38.60.197.97/`
+  - `http://38.60.197.97/health`
+- 仍然保持“研究在本地、VPS 只执行”的边界
 
 ## 本周必须做
 
-### 1. 持续观察 pullback sell v3 纸盘运行
+### 1. 继续观察 `pullback sell v4` 纸盘稳定性，并并行推进本地研究
 
 目标：
 
-- 确认纸盘主任务持续运行
-- 确认监控页持续刷新
-- 确认高波动预警、执行尝试、审计库写入没有中断
+- 确认 `pullback sell v4` 是否已经可以取代当前 base v3，成为后续纸盘候选
 
 当前状态：
 
-- 已在 VPS 上恢复
-- 主任务 `Running`
-- 监控任务 `Running`
-- 监控页公网入口可访问
-- `daily_check` 自动归档任务已注册并开始轮询
-- 最新实测：
-  - 任务名：`xauusd-ai-paper-mt5-paper-pullback-sell-v3-daily-check`
-  - `health = ok`
-  - `last_task_result = 0`
-  - `latest.json` 已持续写入
-  - `summary_runtime_status = healthy`
+- 本地 `150k` density probe 已完成
+- 第一轮排名里：
+  - `entry_hour_18` = 第一名
+  - `closed_trades = 16`
+  - `net_pnl = 3.30`
+  - `profit_factor = 2.5966`
+- 随后已继续完成本地长样本确认：
+  - `300k`：
+    - `ready = true`
+    - `closed_trades = 18`
+    - `net_pnl = 2.61`
+    - `profit_factor = 1.9244`
+    - `pullback_signal_count = 25`
+  - `500k`：
+    - `ready = true`
+    - `closed_trades = 18`
+    - `net_pnl = 2.69`
+    - `profit_factor = 1.9511`
+    - `pullback_signal_count = 25`
+- 随后又继续完成了和第二名候选 `atr_m5_10` 的正面对比：
+  - `300k`：
+    - `entry_hour_18 net_pnl = 2.61`
+    - `atr_m5_10 net_pnl = 0.92`
+  - `500k`：
+    - `entry_hour_18 net_pnl = 2.69`
+    - `atr_m5_10 net_pnl = 1.59`
+- 当前结论：
+  - `entry_hour_18` 已经正式提升成
+    `configs/mvp_pullback_sell_research_v4.yaml`
 
 完成标准：
 
-- 连续多个交易时段观察无中断
-- `daily_check` 持续返回正常
-- 页面与日志时间持续更新
+- `v4` 纸盘已切到 VPS 并持续运行
+- 连续观察多个交易时段内：
+  - 纸盘主任务持续 `Running`
+  - 监控页持续刷新
+  - `daily_check` 维持 `health = ok`
+- 本地研究继续围绕 `v4` 做下一轮参数与样本确认
 
 推荐入口：
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check.ps1 .env.mt5.local
+```bash
+./scripts/research_pullback_sell_v3_density_probe.sh
 ```
 
-建议同时归档：
+当前主文档：
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_archive.ps1 .env.mt5.local
-```
-
-当前自动归档任务入口：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_register_task.ps1 .env.mt5.local -StartAfterRegister
-```
-
-状态查看：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_check_task_status.ps1 .env.mt5.local
-```
+- `docs/analysis/pullback_sell_v3_entry_hour_18_validation_2026-03-31.md`
+- `docs/implementation/pullback_sell_v4_vps_paper_runbook.md`
 
 ### 2. 继续扩展样本，但放到研究机跑，不要压 VPS
 
@@ -166,6 +195,24 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
   - 总收益没有继续放大
   - 收益仍全部来自 `us`
 - 当前需要继续看的，不再只是“能不能导出更长历史”，而是“为什么成交覆盖率没有随着样本一起增长”
+- `2026-03-31` 已补完覆盖率审计入口：
+  - `scripts/research_pullback_sell_v3_coverage_audit.sh`
+  - `scripts/research_pullback_sell_v3_coverage_audit.ps1`
+- `2026-03-31` 随后又补完本地 density probe 入口：
+  - `scripts/research_pullback_sell_v3_density_probe.sh`
+  - `scripts/research_pullback_sell_v3_density_probe.ps1`
+- 覆盖率审计已经给出更明确的结论：
+  - `pullback_state_rows` 会随着样本继续增加
+  - 但 `pullback_signal_count` 始终卡在 `10`
+  - `trades_allowed` 也始终是 `10`
+  - 说明当前不是 `routing / risk / execution` 把大量 pullback 拦掉
+  - 而是 `pullback` 自身触发条件太严，导致信号密度做不厚
+- 当前这轮更长样本复验的主结论已经从：
+  - “会不会被打穿”
+  变成：
+  - “怎样适度放松 pullback 触发密度”
+- 当前第一条已经在本地跑通 `150k / 300k / 500k` 的新候选是：
+  - `pullback sell v4`
 - 复验时优先走 `probe` 报告目录，避免覆盖当前纸盘正在使用的正式 latest
 - 当前这台 VPS 不适合长研究任务：
   - `1` 个物理核心
@@ -200,6 +247,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
 - 从 `150000` 扩到 `500000` 后，成交笔数仍然只有 `7`
 - `session_profit_concentration = 1.0` 只是压线通过，不代表时段分散已经足够好
 - 当前更真实的研究问题已经从“会不会被更长样本打穿”转成了“交易频次为什么仍然这么低”
+- 覆盖率审计已进一步确认：
+  - 当前 bottleneck = `pullback_signal_generation`
+  - 每个真正生成的 `pullback` 信号仍都通过了当前 `routing / risk`
+  - 所以当前优先级不是重新打开 `breakout / asia`
+  - 而是先调 `pullback` 触发密度
 
 完成标准：
 
@@ -210,6 +262,19 @@ powershell -ExecutionPolicy Bypass -File .\scripts\mt5_pullback_sell_v3_daily_ch
   - 是否增加“位置过偏 + 波动过高”的统一过滤
   - 是否继续加严 `pullback` 触发条件
   - 是否需要补一轮 `pullback` 覆盖率 / 信号密度审计
+
+当前建议的下一轮参数优先级：
+
+1. 当前先围绕 `pullback sell v4` 做主候选确认
+2. 再之后才考虑 `min_pullback_depth / min_atr_m1`
+3. `min_directional_distance_to_ema20_atr` 当前优先级可以后移
+4. `atr_m5_10` 暂时降级为备选，不再作为当前主线
+
+当前不建议优先做：
+
+1. 恢复 `breakout`
+2. 放开 `asia`
+3. 放宽验收门槛
 
 ## 下周再做
 

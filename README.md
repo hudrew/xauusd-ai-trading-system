@@ -137,6 +137,8 @@ cd xauusd-ai-trading-system
   看最近一次验收和失败项
 - `xauusd_ai_system.cli reports trend`
   看最近一段时间的通过率和失败项分布
+- `xauusd_ai_system.cli report-audit`
+  对多份 exported acceptance JSON 做横向覆盖率审计，快速定位“交易少”到底卡在信号生成、路由还是风控
 
 这一步的意义是：
 

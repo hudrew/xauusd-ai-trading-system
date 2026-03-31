@@ -1,0 +1,192 @@
+## Local-research density candidate:
+## Keep the v3 branch gate structure, but relax pullback.min_atr_m5 from 15 -> 10.
+state_thresholds:
+  breakout_distance_min: 0.18
+  trend_ema_spread_min: 0.35
+  ema_slope_min: 0.08
+  volatility_ratio_min: 1.15
+  breakout_false_break_max: 2
+  trend_timeframe_alignment_min: 2
+  pullback_depth_min: 0.10
+  pullback_depth_max: 0.55
+  range_ema_spread_max: 0.12
+  range_ema_slope_max: 0.04
+  range_volatility_max: 1.05
+  range_false_break_min: 2
+  range_boundary_touch_min: 2
+  range_timeframe_bias_max: 1
+  spread_ratio_max: 1.50
+  volatility_floor: 0.70
+  conflict_score_max: 0.45
+
+risk:
+  max_single_trade_risk_pct: 0.005
+  max_daily_loss_pct: 0.02
+  max_consecutive_losses: 3
+  max_open_positions: 1
+  max_spread_ratio: 1.40
+  protective_drawdown_pct: 0.08
+  contract_size: 100.0
+  partial_alignment_scale: 0.70
+
+breakout:
+  entry_mode: "retest"
+  stop_loss_atr_multiplier: 1.30
+  take_profit_rr: 2.00
+  partial_take_profit_rr: 1.00
+  max_hold_bars: 20
+  require_retest_confirmation: true
+
+pullback:
+  stop_loss_atr_multiplier: 1.15
+  take_profit_rr: 1.80
+  max_reference_distance_atr: 1.25
+  max_directional_extension_atr: 0.80
+  min_directional_distance_to_ema20_atr: 0.55
+  min_pullback_depth: 0.30
+  min_atr_m1: 4.00
+  min_atr_m5: 10.00
+  min_volatility_ratio: 1.00
+  allowed_sides:
+    - "sell"
+  min_entry_hour: 20
+  edge_position_threshold: 0.80
+  required_state_reasons:
+    - "MTF_ALIGNMENT_OK"
+    - "PULLBACK_DEPTH_OK"
+    - "STRUCTURE_INTACT"
+    - "VOLATILITY_NOT_DEAD"
+  require_m1_reversal_confirmation: true
+  max_hold_bars: 16
+
+mean_reversion:
+  lower_range_position: 0.15
+  upper_range_position: 0.85
+  stop_loss_atr_multiplier: 1.10
+  take_profit_rr: 1.50
+  midline_target_weight: 1.00
+  require_m1_reversal_confirmation: false
+  max_breakout_distance_atr: 0.20
+  max_price_distance_to_ema20_atr: 1.50
+  max_hold_bars: 12
+
+routing:
+  enabled_strategies:
+    - "pullback"
+  disabled_strategies:
+    - "breakout"
+    - "mean_reversion"
+  allowed_sessions:
+    - "us"
+  blocked_sessions: []
+
+volatility_monitor:
+  horizons_minutes: [5, 15, 30]
+  atr_expansion_trigger: 1.20
+  spread_ratio_trigger: 1.20
+  tick_speed_trigger: 1.15
+  breakout_pressure_trigger: 0.20
+  news_proximity_minutes: 15
+  warning_score_min: 0.60
+  critical_score_min: 0.82
+  warning_position_scale: 0.60
+  info_position_scale: 0.85
+  block_on_critical: true
+
+backtest:
+  initial_cash: 10000.0
+  commission: 0.00035
+  slippage_perc: 0.00008
+  slippage_fixed: 0.0
+  fill_delay_bars: 1
+  stop_loss_slippage_perc: 0.00015
+  take_profit_slippage_perc: 0.00005
+  timed_exit_slippage_perc: 0.00012
+  reset_consecutive_losses_on_session_change: true
+
+acceptance:
+  min_total_net_pnl: 0.0
+  min_total_profit_factor: 1.15
+  max_total_drawdown_pct: 0.08
+  min_out_of_sample_net_pnl: 0.0
+  min_out_of_sample_profit_factor: 1.0
+  max_out_of_sample_drawdown_pct: 0.08
+  min_walk_forward_windows: 3
+  min_walk_forward_positive_window_rate: 0.55
+  max_close_month_profit_concentration: 0.65
+  max_session_profit_concentration: 1.00
+
+report_archive:
+  enabled: true
+  base_dir: "reports/research_pullback_sell_v3_atr_m5_10"
+  write_latest: true
+
+deployment_gate:
+  require_acceptance_report: true
+  max_acceptance_report_age_hours: 168.0
+  require_host_check_on_live: true
+  require_preflight_on_live: true
+
+database:
+  url: "sqlite:///tmp/xauusd_ai_system_atr_m5_10.db"
+  auto_create: true
+
+notification:
+  enabled: false
+  channel: "stdout"
+  webhook_url: null
+  min_warning_level: "warning"
+  timeout_seconds: 5.0
+
+runtime:
+  environment: "dev"
+  service_name: "xauusd-ai-system-atr-m5-10"
+  log_level: "INFO"
+  heartbeat_interval_seconds: 30
+  poll_interval_seconds: 5
+  starting_equity: 10000.0
+  dry_run: true
+
+market_data:
+  platform: "none"
+  symbol: "XAUUSD"
+  ctrader:
+    enabled: false
+    account_id: null
+    client_id: null
+    client_secret: null
+    access_token: null
+    environment: "demo"
+    symbol_name: "XAUUSD"
+    symbol_id: null
+    subscribe_to_spot_timestamp: true
+  mt5:
+    enabled: false
+    login: null
+    password: null
+    server: null
+    path: null
+    symbol: "XAUUSD"
+    timeframe: "M1"
+    history_bars: 500
+
+execution:
+  platform: "none"
+  symbol: "XAUUSD"
+  order_comment_prefix: "xauusd-ai"
+  ctrader:
+    enabled: false
+    account_id: null
+    client_id: null
+    client_secret: null
+    access_token: null
+    symbol: "XAUUSD"
+  mt5:
+    enabled: false
+    login: null
+    password: null
+    server: null
+    path: null
+    symbol: "XAUUSD"
+    deviation: 30
+    magic: 20260329

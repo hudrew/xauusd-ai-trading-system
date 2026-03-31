@@ -451,6 +451,62 @@ def _run_report_export(
     )
 
 
+def _run_report_audit(
+    *,
+    json_paths: list[str],
+    output_path: str | None,
+) -> None:
+    from .backtest.report_audit import build_acceptance_report_audit
+
+    payload = build_acceptance_report_audit(json_paths)
+    if output_path is not None:
+        resolved_output_path = Path(output_path)
+        resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
+        resolved_output_path.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        payload["output_path"] = str(resolved_output_path)
+
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+
+
+def _run_pullback_density_probe(
+    *,
+    csv_path: str,
+    config_path: str,
+    output_path: str | None,
+    symbol: str | None,
+    train_ratio: float,
+    warmup_bars: int,
+    train_bars: int,
+    test_bars: int,
+    step_bars: int | None,
+    initial_cash: float | None,
+    commission: float | None,
+    slippage_perc: float | None,
+    slippage_fixed: float | None,
+) -> None:
+    from .backtest.pullback_density_probe import build_pullback_density_probe
+
+    payload = build_pullback_density_probe(
+        csv_path,
+        config_path=config_path,
+        output_path=output_path,
+        symbol=symbol,
+        train_ratio=train_ratio,
+        warmup_bars=warmup_bars,
+        train_bars=train_bars,
+        test_bars=test_bars,
+        step_bars=step_bars,
+        initial_cash=initial_cash,
+        commission=commission,
+        slippage_perc=slippage_perc,
+        slippage_fixed=slippage_fixed,
+    )
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+
+
 def _run_export_mt5_history(
     config: SystemConfig,
     *,
@@ -973,6 +1029,97 @@ def main() -> None:
         default=None,
         help="Optional override for report_archive.base_dir. Relative paths are resolved from the project root.",
     )
+    report_audit_parser = subparsers.add_parser(
+        "report-audit",
+        help="Compare exported acceptance report envelopes and diagnose signal coverage bottlenecks.",
+    )
+    report_audit_parser.add_argument(
+        "json_paths",
+        nargs="+",
+        help="Paths to exported acceptance JSON files or archived latest.json envelopes.",
+    )
+    report_audit_parser.add_argument(
+        "--output",
+        default=None,
+        help="Optional path to write the audit JSON.",
+    )
+    pullback_density_probe_parser = subparsers.add_parser(
+        "pullback-density-probe",
+        help="Run a first-pass acceptance sweep across curated pullback sell v3 density variants.",
+    )
+    pullback_density_probe_parser.add_argument(
+        "csv_path",
+        help="Path to the historical CSV file.",
+    )
+    pullback_density_probe_parser.add_argument(
+        "--config-path",
+        default="configs/mvp_pullback_sell_research_v3_branch_gate.yaml",
+        help="Base config path used to generate the variant sweep.",
+    )
+    pullback_density_probe_parser.add_argument(
+        "--output",
+        default=None,
+        help="Optional path to write the density probe JSON.",
+    )
+    pullback_density_probe_parser.add_argument(
+        "--symbol",
+        default=None,
+        help="Optional trading symbol label. Defaults to the config symbol.",
+    )
+    pullback_density_probe_parser.add_argument(
+        "--train-ratio",
+        type=float,
+        default=0.7,
+        help="Chronological fraction used for the in-sample split.",
+    )
+    pullback_density_probe_parser.add_argument(
+        "--warmup-bars",
+        type=int,
+        default=720,
+        help="Bars to prepend before test windows for feature warmup.",
+    )
+    pullback_density_probe_parser.add_argument(
+        "--train-bars",
+        type=int,
+        default=5000,
+        help="Bars in each rolling walk-forward training window.",
+    )
+    pullback_density_probe_parser.add_argument(
+        "--test-bars",
+        type=int,
+        default=1000,
+        help="Bars in each rolling walk-forward test window.",
+    )
+    pullback_density_probe_parser.add_argument(
+        "--step-bars",
+        type=int,
+        default=None,
+        help="Bars to move the walk-forward window each iteration. Defaults to test-bars.",
+    )
+    pullback_density_probe_parser.add_argument(
+        "--initial-cash",
+        type=float,
+        default=None,
+        help="Override backtest.initial_cash from config.",
+    )
+    pullback_density_probe_parser.add_argument(
+        "--commission",
+        type=float,
+        default=None,
+        help="Override backtest.commission from config.",
+    )
+    pullback_density_probe_parser.add_argument(
+        "--slippage-perc",
+        type=float,
+        default=None,
+        help="Override backtest.slippage_perc from config.",
+    )
+    pullback_density_probe_parser.add_argument(
+        "--slippage-fixed",
+        type=float,
+        default=None,
+        help="Override backtest.slippage_fixed from config.",
+    )
     export_mt5_parser = subparsers.add_parser(
         "export-mt5-history",
         help="Export MT5 historical bars into a normalized CSV for replay/backtest/acceptance.",
@@ -1287,6 +1434,29 @@ def main() -> None:
             output_path=args.output_path,
             report_type=args.report_type,
             report_dir=args.report_dir,
+        )
+        return
+    if args.command == "report-audit":
+        _run_report_audit(
+            json_paths=args.json_paths,
+            output_path=args.output,
+        )
+        return
+    if args.command == "pullback-density-probe":
+        _run_pullback_density_probe(
+            csv_path=args.csv_path,
+            config_path=args.config_path,
+            output_path=args.output,
+            symbol=args.symbol,
+            train_ratio=args.train_ratio,
+            warmup_bars=args.warmup_bars,
+            train_bars=args.train_bars,
+            test_bars=args.test_bars,
+            step_bars=args.step_bars,
+            initial_cash=args.initial_cash,
+            commission=args.commission,
+            slippage_perc=args.slippage_perc,
+            slippage_fixed=args.slippage_fixed,
         )
         return
     if args.command == "export-mt5-history":

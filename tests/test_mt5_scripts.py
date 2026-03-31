@@ -128,6 +128,18 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn('"deploy-gate", "--strict"', content)
         self.assertIn('"live-once", "--require-deploy-gate", "--require-preflight"', content)
 
+    def test_pullback_sell_v4_prepare_script_exists(self) -> None:
+        script = ROOT / "scripts/mt5_pullback_sell_v4_prepare.ps1"
+
+        self.assertTrue(script.exists())
+        content = script.read_text(encoding="utf-8")
+        self.assertIn("mt5_paper_pullback_sell_v4.yaml", content)
+        self.assertIn('"report-import"', content)
+        self.assertIn('"host-check", "--strict"', content)
+        self.assertIn('"preflight", "--strict"', content)
+        self.assertIn('"deploy-gate", "--strict"', content)
+        self.assertIn('"live-once", "--require-deploy-gate", "--require-preflight"', content)
+
     def test_pullback_sell_v3_runtime_wrapper_scripts_exist(self) -> None:
         relative_paths = (
             "scripts/mt5_pullback_sell_v3_paper_loop.ps1",
@@ -211,6 +223,105 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
             self.assertIn("ConfigPath = \"configs\\mt5_paper_pullback_sell_v3.yaml\"", content, relative_path)
             self.assertNotIn('-Mode "paper"', content, relative_path)
 
+    def test_pullback_sell_v4_runtime_wrapper_scripts_exist(self) -> None:
+        relative_paths = (
+            "scripts/mt5_pullback_sell_v4_paper_loop.ps1",
+            "scripts/mt5_pullback_sell_v4_register_task.ps1",
+            "scripts/mt5_pullback_sell_v4_task_recover.ps1",
+            "scripts/mt5_pullback_sell_v4_task_status.ps1",
+            "scripts/mt5_pullback_sell_v4_unregister_task.ps1",
+            "scripts/mt5_pullback_sell_v4_daily_check.ps1",
+            "scripts/mt5_pullback_sell_v4_daily_check_archive.ps1",
+            "scripts/mt5_pullback_sell_v4_daily_check_register_task.ps1",
+            "scripts/mt5_pullback_sell_v4_daily_check_task_status.ps1",
+            "scripts/mt5_pullback_sell_v4_daily_check_unregister_task.ps1",
+            "scripts/mt5_pullback_sell_v4_daily_recover.ps1",
+            "scripts/mt5_pullback_sell_v4_monitoring_dashboard.ps1",
+            "scripts/mt5_pullback_sell_v4_monitoring_recover.ps1",
+            "scripts/mt5_pullback_sell_v4_monitoring_register_tasks.ps1",
+            "scripts/mt5_pullback_sell_v4_monitoring_task_status.ps1",
+            "scripts/mt5_pullback_sell_v4_monitoring_unregister_tasks.ps1",
+        )
+
+        for relative_path in relative_paths:
+            content = (ROOT / relative_path).read_text(encoding="utf-8")
+            self.assertIn("configs\\mt5_paper_pullback_sell_v4.yaml", content, relative_path)
+
+        self.assertIn(
+            "mt5_paper_loop.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v4_paper_loop.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_register_task.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v4_register_task.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_task_status.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v4_task_status.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_task_recover.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v4_task_recover.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_unregister_task.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v4_unregister_task.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_pullback_sell_v4_task_status.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v4_daily_check.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_pullback_sell_v4_monitoring_task_status.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v4_daily_check.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_pullback_sell_v4_daily_check.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v4_daily_check_archive.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_pullback_sell_v4_daily_check_archive.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v4_daily_check_register_task.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_pullback_sell_v4_monitoring_recover.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v4_daily_recover.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_pullback_sell_v4_daily_check.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v4_daily_recover.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_pullback_sell_v4_task_recover.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v4_daily_recover.ps1").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "mt5_monitoring_recover.ps1",
+            (ROOT / "scripts/mt5_pullback_sell_v4_monitoring_recover.ps1").read_text(encoding="utf-8"),
+        )
+
+    def test_pullback_sell_v4_wrappers_pin_paper_mode_via_env(self) -> None:
+        relative_paths = (
+            "scripts/mt5_pullback_sell_v4_register_task.ps1",
+            "scripts/mt5_pullback_sell_v4_task_recover.ps1",
+            "scripts/mt5_pullback_sell_v4_task_status.ps1",
+            "scripts/mt5_pullback_sell_v4_unregister_task.ps1",
+            "scripts/mt5_pullback_sell_v4_daily_check_register_task.ps1",
+            "scripts/mt5_pullback_sell_v4_daily_check_task_status.ps1",
+            "scripts/mt5_pullback_sell_v4_daily_check_unregister_task.ps1",
+            "scripts/mt5_pullback_sell_v4_monitoring_dashboard.ps1",
+            "scripts/mt5_pullback_sell_v4_monitoring_recover.ps1",
+            "scripts/mt5_pullback_sell_v4_monitoring_register_tasks.ps1",
+            "scripts/mt5_pullback_sell_v4_monitoring_task_status.ps1",
+            "scripts/mt5_pullback_sell_v4_monitoring_unregister_tasks.ps1",
+        )
+
+        for relative_path in relative_paths:
+            content = (ROOT / relative_path).read_text(encoding="utf-8")
+            self.assertIn('$env:XAUUSD_AI_ENV = "paper"', content, relative_path)
+            self.assertIn("ConfigPath = \"configs\\mt5_paper_pullback_sell_v4.yaml\"", content, relative_path)
+            self.assertNotIn('-Mode "paper"', content, relative_path)
+
     def test_runtime_scripts_support_explicit_config_override(self) -> None:
         shell_common = (ROOT / "scripts/_mt5_common.sh").read_text(encoding="utf-8")
         ps_common = (ROOT / "scripts/_mt5_common.ps1").read_text(encoding="utf-8")
@@ -274,6 +385,38 @@ class Mt5ScriptDefaultsTests(unittest.TestCase):
         self.assertIn("research_pullback_sell_v3_probe_acceptance_latest.json", powershell_content)
         self.assertIn('"acceptance"', powershell_content)
         self.assertIn("report-export", powershell_content)
+
+    def test_pullback_sell_v3_coverage_audit_scripts_exist(self) -> None:
+        shell_script = ROOT / "scripts/research_pullback_sell_v3_coverage_audit.sh"
+        powershell_script = ROOT / "scripts/research_pullback_sell_v3_coverage_audit.ps1"
+
+        self.assertTrue(shell_script.exists())
+        self.assertTrue(powershell_script.exists())
+        shell_content = shell_script.read_text(encoding="utf-8")
+        powershell_content = powershell_script.read_text(encoding="utf-8")
+
+        self.assertIn("report-audit", shell_content)
+        self.assertIn("research_pullback_sell_v3_coverage_audit_latest.json", shell_content)
+        self.assertIn("research_pullback_sell_v3_probe_acceptance_500000_local.json", shell_content)
+        self.assertIn("report-audit", powershell_content)
+        self.assertIn("research_pullback_sell_v3_coverage_audit_latest.json", powershell_content)
+        self.assertIn("research_pullback_sell_v3_probe_acceptance_500000_local.json", powershell_content)
+
+    def test_pullback_sell_v3_density_probe_scripts_exist(self) -> None:
+        shell_script = ROOT / "scripts/research_pullback_sell_v3_density_probe.sh"
+        powershell_script = ROOT / "scripts/research_pullback_sell_v3_density_probe.ps1"
+
+        self.assertTrue(shell_script.exists())
+        self.assertTrue(powershell_script.exists())
+        shell_content = shell_script.read_text(encoding="utf-8")
+        powershell_content = powershell_script.read_text(encoding="utf-8")
+
+        self.assertIn("pullback-density-probe", shell_content)
+        self.assertIn("research_pullback_sell_v3_density_probe_latest.json", shell_content)
+        self.assertIn("xauusd_m1_history_150000_chunked_vps_full.csv", shell_content)
+        self.assertIn("pullback-density-probe", powershell_content)
+        self.assertIn("research_pullback_sell_v3_density_probe_latest.json", powershell_content)
+        self.assertIn("xauusd_m1_history_150000_chunked_vps_full.csv", powershell_content)
 
     def test_monitoring_dashboard_scripts_avoid_host_variable_collision(self) -> None:
         base_script = ROOT / "scripts/mt5_monitoring_dashboard.ps1"

@@ -1,5 +1,16 @@
 # Pullback Sell V3 Windows VPS 纸盘落地清单
 
+`2026-03-31` 之后，如果你要查看已经准备好的 `v4` 切盘包，不要继续在这份 `v3` 手册里找，直接看：
+
+- `docs/implementation/pullback_sell_v4_vps_paper_runbook.md`
+
+当前状态也需要同步记住：
+
+- `v3` 相关 VPS 任务仍保持停用
+- `v4` 的配置、监控和值守脚本已经补齐
+- `2026-03-31` 同日已完成 `v4` 实际切盘并恢复任务
+- 公网监控入口已经切到 `v4` 的 `http://38.60.197.97/`
+
 如果你只是做日常值守、看监控页、恢复页面或检查任务状态，优先看这份更短的速查手册：
 
 - `docs/implementation/pullback_sell_v3_daily_ops_quickstart.md`
@@ -181,6 +192,59 @@ powershell -ExecutionPolicy Bypass -File .\scripts\research_pullback_sell_v3_ref
 - 解释为什么当前成交覆盖率一直没有明显增加
 - 判断这条候选线是应该保持低频高筛选
 - 还是需要适度放松 `pullback` 的触发密度
+
+这部分现在也已经补成了单独工具，不需要再手工翻 JSON：
+
+```bash
+./scripts/research_pullback_sell_v3_coverage_audit.sh
+```
+
+或 Windows PowerShell：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\research_pullback_sell_v3_coverage_audit.ps1
+```
+
+默认会直接审计：
+
+- `150000`
+- `300000`
+- `500000`
+
+三份 exported acceptance JSON，并写出：
+
+- `tmp/research_pullback_sell_v3_coverage_audit_latest.json`
+
+当前这轮审计已经确认：
+
+- `pullback_state_rows` 会随着样本增加继续增长
+- 但 `pullback_signal_count` 始终只有 `10`
+- `trades_allowed` 也始终是 `10`
+- 所以当前主瓶颈不是 `routing / risk / execution`
+- 而是 `pullback` 触发条件本身过严
+- 下一轮优先该动的是：
+  - `pullback.min_entry_hour`
+  - `pullback.min_directional_distance_to_ema20_atr`
+  - `pullback.min_pullback_depth`
+  - `pullback.min_atr_m1`
+  - `pullback.min_atr_m5`
+- 当前不建议第一步就去：
+  - 恢复 `breakout`
+  - 放开 `asia`
+
+`2026-03-31` 之后，这份手册还需要注意一个状态变化：
+
+- 用户已经明确决定：
+  - 参数扫描固定放到本地研究机
+  - 暂时不再让宿主机参与研究
+- 因此这台 VPS 上当前 pullback v3 相关计划任务已被停掉并禁用
+- 当前这台机器的定位重新收口为：
+  - 以后只承担执行和值守
+  - 不承担本地参数研究
+- 当前本地研究主候选已经切到：
+  - `configs/mvp_pullback_sell_research_v4.yaml`
+- 该候选的本地验证结论见：
+  - `docs/analysis/pullback_sell_v3_entry_hour_18_validation_2026-03-31.md`
 
 这一轮也顺手确认了一个非常重要的部署边界：
 

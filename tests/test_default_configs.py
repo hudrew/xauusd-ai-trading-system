@@ -87,6 +87,59 @@ class DefaultConfigTests(unittest.TestCase):
         self.assertEqual(config.report_archive.base_dir, "reports/research_pullback_sell_v3")
         self.assertEqual(config.database.url, "sqlite:///var/xauusd_ai/paper_pullback_sell_v3.db")
 
+    def test_mt5_paper_pullback_sell_v4_config_isolated_from_mainline(self) -> None:
+        config = load_system_config(ROOT / "configs/mt5_paper_pullback_sell_v4.yaml")
+
+        self.assertEqual(config.runtime.environment, "paper")
+        self.assertTrue(config.runtime.dry_run)
+        self.assertEqual(config.routing.enabled_strategies, ["pullback"])
+        self.assertEqual(config.routing.disabled_strategies, ["breakout", "mean_reversion"])
+        self.assertEqual(config.routing.allowed_sessions, ["us"])
+        self.assertEqual(config.pullback.allowed_sides, ["sell"])
+        self.assertEqual(config.pullback.min_entry_hour, 18)
+        self.assertEqual(config.report_archive.base_dir, "reports/research_pullback_sell_v4")
+        self.assertEqual(config.database.url, "sqlite:///var/xauusd_ai/paper_pullback_sell_v4.db")
+        self.assertEqual(config.runtime.service_name, "xauusd-ai-paper-pullback-sell-v4")
+
+    def test_pullback_sell_research_v3_entry_hour_18_candidate_config_loads(self) -> None:
+        config = load_system_config(
+            ROOT / "configs/mvp_pullback_sell_research_v3_branch_gate_entry_hour_18.yaml"
+        )
+
+        self.assertEqual(config.routing.enabled_strategies, ["pullback"])
+        self.assertEqual(config.routing.allowed_sessions, ["us"])
+        self.assertEqual(config.pullback.allowed_sides, ["sell"])
+        self.assertEqual(config.pullback.min_entry_hour, 18)
+        self.assertEqual(
+            config.report_archive.base_dir,
+            "reports/research_pullback_sell_v3_entry_hour_18",
+        )
+
+    def test_pullback_sell_research_v3_atr_m5_10_candidate_config_loads(self) -> None:
+        config = load_system_config(
+            ROOT / "configs/mvp_pullback_sell_research_v3_branch_gate_atr_m5_10.yaml"
+        )
+
+        self.assertEqual(config.routing.enabled_strategies, ["pullback"])
+        self.assertEqual(config.routing.allowed_sessions, ["us"])
+        self.assertEqual(config.pullback.allowed_sides, ["sell"])
+        self.assertEqual(config.pullback.min_entry_hour, 20)
+        self.assertEqual(config.pullback.min_atr_m5, 10.0)
+        self.assertEqual(
+            config.report_archive.base_dir,
+            "reports/research_pullback_sell_v3_atr_m5_10",
+        )
+
+    def test_pullback_sell_research_v4_config_loads(self) -> None:
+        config = load_system_config(ROOT / "configs/mvp_pullback_sell_research_v4.yaml")
+
+        self.assertEqual(config.routing.enabled_strategies, ["pullback"])
+        self.assertEqual(config.routing.allowed_sessions, ["us"])
+        self.assertEqual(config.pullback.allowed_sides, ["sell"])
+        self.assertEqual(config.pullback.min_entry_hour, 18)
+        self.assertEqual(config.pullback.min_atr_m5, 15.0)
+        self.assertEqual(config.report_archive.base_dir, "reports/research_pullback_sell_v4")
+
 
 if __name__ == "__main__":
     unittest.main()

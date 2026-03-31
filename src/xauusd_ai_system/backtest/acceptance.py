@@ -89,14 +89,40 @@ def run_acceptance_csv(
     slippage_perc: float | None = None,
     slippage_fixed: float | None = None,
 ) -> AcceptanceReport:
-    resolved_symbol = (
-        symbol
-        or config.market_data.symbol
-        or config.execution.symbol
-        or config.market_data.mt5.symbol
-        or "XAUUSD"
-    )
+    resolved_symbol = _resolve_acceptance_symbol(config, symbol=symbol)
     market_data = CSVMarketDataLoader().load(path, symbol=resolved_symbol)
+    return run_acceptance_market_data(
+        market_data,
+        config,
+        symbol=resolved_symbol,
+        train_ratio=train_ratio,
+        warmup_bars=warmup_bars,
+        train_bars=train_bars,
+        test_bars=test_bars,
+        step_bars=step_bars,
+        initial_cash=initial_cash,
+        commission=commission,
+        slippage_perc=slippage_perc,
+        slippage_fixed=slippage_fixed,
+    )
+
+
+def run_acceptance_market_data(
+    market_data,
+    config: SystemConfig,
+    *,
+    symbol: str | None = None,
+    train_ratio: float = 0.7,
+    warmup_bars: int = 720,
+    train_bars: int = 5000,
+    test_bars: int = 1000,
+    step_bars: int | None = None,
+    initial_cash: float | None = None,
+    commission: float | None = None,
+    slippage_perc: float | None = None,
+    slippage_fixed: float | None = None,
+) -> AcceptanceReport:
+    resolved_symbol = _resolve_acceptance_symbol(config, symbol=symbol)
     backtest = run_backtrader_market_data(
         market_data,
         config,
@@ -135,6 +161,20 @@ def run_acceptance_csv(
         backtest=backtest,
         sample_split=sample_split,
         walk_forward=walk_forward,
+    )
+
+
+def _resolve_acceptance_symbol(
+    config: SystemConfig,
+    *,
+    symbol: str | None,
+) -> str:
+    return (
+        symbol
+        or config.market_data.symbol
+        or config.execution.symbol
+        or config.market_data.mt5.symbol
+        or "XAUUSD"
     )
 
 
