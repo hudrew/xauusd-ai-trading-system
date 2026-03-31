@@ -1124,6 +1124,18 @@ class PromotionGateRunner:
         if not isinstance(signals_by_strategy, dict):
             signals_by_strategy = {}
 
+        checks = payload.get("checks")
+        if not isinstance(checks, list):
+            checks = []
+        check_observed: dict[str, Any] = {}
+        for check in checks:
+            if not isinstance(check, dict):
+                continue
+            name = check.get("name")
+            observed = check.get("observed")
+            if isinstance(name, str) and name and observed is not None:
+                check_observed[name] = observed
+
         derived = {
             "net_pnl": backtest.get("net_pnl"),
             "profit_factor": backtest.get("profit_factor"),
@@ -1145,6 +1157,10 @@ class PromotionGateRunner:
             "out_of_sample_max_drawdown_pct": out_of_sample.get("max_drawdown_pct"),
             "walk_forward_window_count": walk_forward.get("total_windows"),
             "walk_forward_positive_window_rate": walk_forward.get("positive_window_rate"),
+            "close_month_profit_concentration": check_observed.get(
+                "close_month_profit_concentration"
+            ),
+            "session_profit_concentration": check_observed.get("session_profit_concentration"),
         }
         return {key: value for key, value in derived.items() if value is not None}
 

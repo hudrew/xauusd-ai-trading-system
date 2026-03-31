@@ -30,6 +30,9 @@
   - 接受 PowerShell `ToString("o")` 产生的 7 位小数时间戳
   - 候选验收 `headline_metrics` 如果是残缺摘要，会继续从 payload / payload.summary / 衍生指标补齐
   - 候选 gate 包装脚本在可复用 `daily_check.execution_audit` 时，不再错误强塞缺失的 `execution_audit latest.json`
+  - 导入型 acceptance 只有 `summary.passed/failed/total` 时，也会从 `payload.checks[].observed` 补出：
+    - `close_month_profit_concentration`
+    - `session_profit_concentration`
 
 ## 当前意义
 
@@ -61,7 +64,7 @@
   - `48 tests`
   - `OK`
 - `python3 -m unittest tests.test_promotion_gate`
-  - `9 tests`
+  - `10 tests`
   - `OK`
 - `python3 -m unittest tests.test_cli_promotion_gate`
   - `4 tests`
@@ -89,15 +92,22 @@
 ## 当前阻塞
 
 - VPS 远端同步暂时卡在管理通道：
-  - SSH 22 端口可达，但当前从本机使用现有口令 / key 认证失败
-  - WinRM 5985/5986 端口可达，但当前请求从本机超时，尚未形成可复用的远程执行链路
+  - `2026-04-01` 已确认可用 `expect + SSH` 方式进入 VPS 并同步关键文件
+  - WinRM 5985/5986 端口虽然可达，但当前请求从本机仍超时，尚未形成可复用的远程执行链路
 - 从本机访问：
   - `http://38.60.197.97/health`
     - 返回正常
   - `http://38.60.197.97:8765/health`
-    - 当前请求超时，需在 VPS 上复核候选监控对外监听 / 防火墙策略
-- 即使代码同步完成，严格候选放行门仍大概率会继续要求：
-  - 至少一段真实 `execution_attempt / execution_sync / reconcile_sync` 证据
+    - 当前外部请求仍超时
+    - 但 VPS 本机 `127.0.0.1:8765/health` 已返回 `200`
+    - 说明更像是公网放行 / 宿主机入站规则问题，不是候选监控服务本身异常
+- `2026-04-01` 当前严格候选 gate 已缩窄到只剩 4 个失败项：
+  - `current_execution_audit_execution_chain_visible`
+  - `current_execution_audit_reconcile_chain_visible`
+  - `candidate_execution_audit_execution_chain_visible`
+  - `candidate_execution_audit_reconcile_chain_visible`
+- 这 4 个失败项都来自同一个现实约束：
+  - 当前两条纸盘都还没有真实 `execution_attempt / execution_sync / reconcile_sync` 记录
   - 这是业务真实性要求，不是兼容性 bug
 
 ## 当前不建议做

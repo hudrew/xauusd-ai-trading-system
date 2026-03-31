@@ -494,6 +494,104 @@ class PromotionGateRunnerTests(unittest.TestCase):
                 1.0,
             )
 
+    def test_promotion_gate_derives_profit_concentration_from_acceptance_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            candidate_report_dir = base_dir / "candidate_research"
+            archive = FileReportArchive(
+                ReportArchiveConfig(
+                    enabled=True,
+                    base_dir=str(candidate_report_dir),
+                    write_latest=True,
+                )
+            )
+            archive.save(
+                "acceptance",
+                {
+                    "checked_at": "2026-04-01T10:00:00+00:00",
+                    "backtest": {
+                        "net_pnl": 2.97,
+                        "profit_factor": 2.0618,
+                        "max_drawdown_pct": 0.0002,
+                        "closed_trades": 18,
+                        "won_trades": 13,
+                        "lost_trades": 5,
+                        "win_rate": 0.7222,
+                        "decision_summary": {
+                            "signals_generated": 10414,
+                            "signals_by_strategy": {"pullback": 26},
+                            "trades_allowed": 26,
+                            "blocked_trades": 10388,
+                        },
+                    },
+                    "sample_split": {
+                        "out_of_sample": {
+                            "backtest": {
+                                "net_pnl": 2.47,
+                                "profit_factor": 1.7490,
+                                "max_drawdown_pct": 0.0002,
+                            }
+                        }
+                    },
+                    "walk_forward": {
+                        "summary": {
+                            "total_windows": 741,
+                            "positive_window_rate": 0.9960,
+                        }
+                    },
+                    "checks": [
+                        {
+                            "name": "close_month_profit_concentration",
+                            "observed": 0.6129,
+                            "passed": True,
+                        },
+                        {
+                            "name": "session_profit_concentration",
+                            "observed": 1.0,
+                            "passed": True,
+                        },
+                    ],
+                },
+                summary={
+                    "passed_checks": 10,
+                    "failed_checks": 0,
+                    "total_checks": 10,
+                },
+                ready=True,
+            )
+
+            current_daily_check_path = base_dir / "current_daily_check_latest.json"
+            current_daily_check_path.write_text(
+                json.dumps(
+                    {
+                        "checked_at": "2026-04-01T11:30:00+00:00",
+                        "health": "ok",
+                        "issue_count": 0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = SystemConfig()
+            runner = PromotionGateRunner(
+                config,
+                candidate_report_dir=str(candidate_report_dir),
+                current_daily_check_path=str(current_daily_check_path),
+                require_candidate_daily_check=False,
+                now=datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc),
+            )
+            report = runner.run()
+
+            self.assertTrue(report.ready)
+            self.assertEqual(
+                report.candidate_acceptance["headline_metrics"]["close_month_profit_concentration"],
+                0.6129,
+            )
+            self.assertEqual(
+                report.candidate_acceptance["headline_metrics"]["session_profit_concentration"],
+                1.0,
+            )
+
     def test_promotion_gate_fails_when_candidate_metrics_do_not_meet_threshold(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             base_dir = Path(tmpdir)
